@@ -333,8 +333,55 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim) {
     toRead -= n;
   }
   *dst=0;
-  return (num+1-toRead);
-  
+
+  if (toRead) {
+    return (num-toRead);
+  }
+  else{
+    while (curPosition_ < fileSize_) {
+      toRead = min(30000UL, fileSize_ - curPosition_);
+      while (toRead) {
+        offset = curPosition_ & 0X1FF;         // offset in block
+        if (type_ == FAT_FILE_TYPE_ROOT_FIXED) {
+          block = vol_->rootDirStart() + (curPosition_ >> 9);
+        } else {
+          blockOfCluster = vol_->blockOfCluster(curPosition_);
+          if (offset == 0 && blockOfCluster == 0) {
+            // start of new cluster
+            if (curPosition_ == 0) {
+              // use first cluster in file
+              curCluster_ = firstCluster_;
+            } else {
+              // get next cluster from FAT
+              if (!vol_->fatGet(curCluster_, &curCluster_)) goto fail;
+            }
+          }
+          block = vol_->clusterStartBlock(curCluster_) + blockOfCluster;
+        }
+        n = toRead;
+
+        // amount to be read from current block
+        if (n > (512 - offset)) n = 512 - offset;
+        // read block to cache and copy data to caller
+        if (!vol_->cacheRawBlock(block, SdVolume::CACHE_FOR_READ)) goto fail;
+        src = vol_->cache()->data + offset;
+
+        src=(uint8_t*)memchr(src, '\n', n);
+        if (src != NULL) {
+          //'\n' available
+          n=src-(vol_->cache()->data + offset);
+          curPosition_ += n;
+          toRead -= n;
+          return num;
+        }
+        curPosition_ += n;
+        toRead -= n;
+      }
+    }
+    return num;
+  }
+
+
 fail:
   *str=0;
   return -1;
@@ -414,38 +461,38 @@ int8_t SdBaseFile::lsPrintNext( uint8_t flags, uint8_t indent) {
       && DIR_IS_FILE_OR_SUBDIR(&dir)) break;
   }
   // indent for dir level
-  for (uint8_t i = 0; i < indent; i++) /*MYSERIAL.write(' ')*/;
+  for (uint8_t i = 0; i < indent; i++) MYSERIAL.write(' ');
 
   // print name
   for (uint8_t i = 0; i < 11; i++) {
     if (dir.name[i] == ' ')continue;
     if (i == 8) {
-      /*MYSERIAL.write('.')*/;
+      MYSERIAL.write('.');
       w++;
     }
-    /*MYSERIAL.write(dir.name[i]);*/
+    MYSERIAL.write(dir.name[i]);
     w++;
   }
   if (DIR_IS_SUBDIR(&dir)) {
-//    MYSERIAL.write('/');
+    MYSERIAL.write('/');
     w++;
   }
   if (flags & (LS_DATE | LS_SIZE)) {
-//    while (w++ < 14) MYSERIAL.write(' ');
+    while (w++ < 14) MYSERIAL.write(' ');
   }
   // print modify date/time if requested
   if (flags & LS_DATE) {
-//    MYSERIAL.write(' ');
+    MYSERIAL.write(' ');
     printFatDate( dir.lastWriteDate);
-//    MYSERIAL.write(' ');
+    MYSERIAL.write(' ');
     printFatTime( dir.lastWriteTime);
   }
   // print size if requested
   if (!DIR_IS_SUBDIR(&dir) && (flags & LS_SIZE)) {
-//    MYSERIAL.write(' ');
-//    MYSERIAL.print(dir.fileSize);
+    MYSERIAL.write(' ');
+    MYSERIAL.print(dir.fileSize);
   }
-//  MYSERIAL.println();
+  MYSERIAL.println();
   return DIR_IS_FILE(&dir) ? 1 : 2;
 }
 //------------------------------------------------------------------------------
@@ -1016,26 +1063,26 @@ void SdBaseFile::printDirName(const dir_t& dir,
   for (uint8_t i = 0; i < 11; i++) {
     if (dir.name[i] == ' ')continue;
     if (i == 8) {
-//      MYSERIAL.write('.');
+      MYSERIAL.write('.');
       w++;
     }
-//    MYSERIAL.write(dir.name[i]);
+    MYSERIAL.write(dir.name[i]);
     w++;
   }
   if (DIR_IS_SUBDIR(&dir) && printSlash) {
-//    MYSERIAL.write('/');
+    MYSERIAL.write('/');
     w++;
   }
   while (w < width) {
-//    MYSERIAL.write(' ');
+    MYSERIAL.write(' ');
     w++;
   }
 }
 //------------------------------------------------------------------------------
 // print uint8_t with width 2
 static void print2u( uint8_t v) {
-//  if (v < 10) MYSERIAL.write('0');
-//  MYSERIAL.print(v, DEC);
+  if (v < 10) MYSERIAL.write('0');
+  MYSERIAL.print(v, DEC);
 }
 //------------------------------------------------------------------------------
 /** %Print a directory date field to Serial.
@@ -1054,10 +1101,10 @@ static void print2u( uint8_t v) {
  * \param[in] fatDate The date field from a directory entry.
  */
 void SdBaseFile::printFatDate(uint16_t fatDate) {
-//  MYSERIAL.print(FAT_YEAR(fatDate));
-//  MYSERIAL.write('-');
+  MYSERIAL.print(FAT_YEAR(fatDate));
+  MYSERIAL.write('-');
   print2u( FAT_MONTH(fatDate));
-//  MYSERIAL.write('-');
+  MYSERIAL.write('-');
   print2u( FAT_DAY(fatDate));
 }
 
@@ -1071,9 +1118,9 @@ void SdBaseFile::printFatDate(uint16_t fatDate) {
  */
 void SdBaseFile::printFatTime( uint16_t fatTime) {
   print2u( FAT_HOUR(fatTime));
-//  MYSERIAL.write(':');
+  MYSERIAL.write(':');
   print2u( FAT_MINUTE(fatTime));
-//  MYSERIAL.write(':');
+  MYSERIAL.write(':');
   print2u( FAT_SECOND(fatTime));
 }
 //------------------------------------------------------------------------------
@@ -1085,7 +1132,7 @@ void SdBaseFile::printFatTime( uint16_t fatTime) {
 bool SdBaseFile::printName() {
   char name[13];
   if (!getFilename(name)) return false;
-//  MYSERIAL.print(name);
+  MYSERIAL.print(name);
   return true;
 }
 //------------------------------------------------------------------------------

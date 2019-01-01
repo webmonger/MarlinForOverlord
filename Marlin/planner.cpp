@@ -1104,11 +1104,11 @@ void plan_buffer_line(const float &x, const float &y, const float &z, const floa
   long target[4];
   long target_raw[3];
 
-  float plainFactorZBuffer = z*plainFactorCAC -x*plainFactorAAC;
-  
-  target[X_AXIS] = lround((z*plainFactorAAC+x*plainFactorCAC)*axis_steps_per_unit[X_AXIS]);
-  target[Y_AXIS] = lround((y*plainFactorCBC-plainFactorZBuffer*plainFactorBBC)*axis_steps_per_unit[Y_AXIS]);
-  target[Z_AXIS] = lround((y*plainFactorBBC+plainFactorZBuffer*plainFactorCBC)*axis_steps_per_unit[Z_AXIS]);
+  float plainFactorZBuffer = z-z*plainFactorCAC -x*plainFactorAAC;
+
+  target[X_AXIS] = lround((z*plainFactorAAC+x-x*plainFactorCAC)*axis_steps_per_unit[X_AXIS]);
+  target[Y_AXIS] = lround((y-y*plainFactorCBC-plainFactorZBuffer*plainFactorBBC)*axis_steps_per_unit[Y_AXIS]);
+  target[Z_AXIS] = lround((y*plainFactorBBC+plainFactorZBuffer- plainFactorZBuffer*plainFactorCBC)*axis_steps_per_unit[Z_AXIS]);
   target[E_AXIS] = lround(e*axis_steps_per_unit[E_AXIS]*volume_to_filament_length[extruder]);
   
   calculate_delta_long(target_raw, target);
@@ -1810,11 +1810,11 @@ block->steps_y = labs((target[X_AXIS]-position[X_AXIS]) - (target[Y_AXIS]-positi
 
 void plan_set_position(const float &x, const float &y, const float &z, const float &e)
 {
-  float plainFactorZBuffer = z*plainFactorCAC -x*plainFactorAAC;
+  float plainFactorZBuffer = z- z*plainFactorCAC -x*plainFactorAAC;
   
-  position[X_AXIS] = lround((z*plainFactorAAC+x*plainFactorCAC)*axis_steps_per_unit[X_AXIS]);
-  position[Y_AXIS] = lround((y*plainFactorCBC-plainFactorZBuffer*plainFactorBBC)*axis_steps_per_unit[Y_AXIS]);
-  position[Z_AXIS] = lround((y*plainFactorBBC+plainFactorZBuffer*plainFactorCBC)*axis_steps_per_unit[Z_AXIS]);
+  position[X_AXIS] = lround((z*plainFactorAAC+x-x*plainFactorCAC)*axis_steps_per_unit[X_AXIS]);
+  position[Y_AXIS] = lround((y- y*plainFactorCBC-plainFactorZBuffer*plainFactorBBC)*axis_steps_per_unit[Y_AXIS]);
+  position[Z_AXIS] = lround((y*plainFactorBBC+plainFactorZBuffer-plainFactorZBuffer*plainFactorCBC)*axis_steps_per_unit[Z_AXIS]);
   position[E_AXIS] = lround(e*axis_steps_per_unit[E_AXIS]*volume_to_filament_length[active_extruder]);
   
   calculate_delta_long(position_raw, position);

@@ -73,6 +73,23 @@
 
 #endif
 
+#ifdef _BED_DEBUG
+
+#define SERIAL_BED_DEBUG(x) SERIAL_PROTOCOL(x)
+#define SERIAL_BED_DEBUGPGM(x) SERIAL_PROTOCOLPGM(x)
+#define SERIAL_BED_DEBUGLN(x) SERIAL_PROTOCOLLN(x)
+#define SERIAL_BED_DEBUGLNPGM(x) SERIAL_PROTOCOLLNPGM(x)
+#define SERIAL_BED_DEBUGPGMPTR(x) serialprintPGM(x)
+
+#else
+
+#define SERIAL_BED_DEBUG(x)
+#define SERIAL_BED_DEBUGPGM(x)
+#define SERIAL_BED_DEBUGLN(x)
+#define SERIAL_BED_DEBUGLNPGM(x)
+#define SERIAL_BED_DEBUGPGMPTR(x)
+
+#endif
 
 
 const char errormagic[] PROGMEM ="Error:";
@@ -174,21 +191,24 @@ void FlushSerialRequestResend();
 void ClearToSend();
 
 void get_coordinates();
-#ifdef DELTA
-void calculate_delta(float cartesian[3]);
-#endif
 void prepare_move();
 void kill();
 #define STOP_REASON_MAXTEMP              1
 #define STOP_REASON_MINTEMP              2
 #define STOP_REASON_MAXTEMP_BED          3
 #define STOP_REASON_HEATER_ERROR         4
-#define STOP_REASON_Z_ENDSTOP_BROKEN_ERROR 5
-#define STOP_REASON_Z_ENDSTOP_STUCK_ERROR  6
-#define STOP_REASON_XY_ENDSTOP_BROKEN_ERROR 7
-#define STOP_REASON_XY_ENDSTOP_STUCK_ERROR  8
+#define STOP_REASON_X_ENDSTOP_BROKEN_ERROR 30
+#define STOP_REASON_X_ENDSTOP_STUCK_ERROR  31
+#define STOP_REASON_Y_ENDSTOP_BROKEN_ERROR 32
+#define STOP_REASON_Y_ENDSTOP_STUCK_ERROR  33
+#define STOP_REASON_Z_ENDSTOP_BROKEN_ERROR 34
+#define STOP_REASON_Z_ENDSTOP_STUCK_ERROR  35
+
 #define STOP_REASON_SAFETY_TRIGGER       10
 #define STOP_REASON_REDUNDANT_TEMP 20
+
+#define STOP_REASON_OUT_OF_MEMORY 40
+
 void Stop(uint8_t reasonNr);
 
 bool IsStopped();
@@ -247,14 +267,12 @@ extern unsigned long stoptime;
 extern unsigned long pausetime;
 
 
-#ifdef SDUPS
 extern uint8_t targetFanSpeed;
 extern int targetFeedmultiply;
 
 extern float feedrate;
 extern float next_feedrate;
 
-#endif
 
 #ifdef PowerOnDemand
 
@@ -270,6 +288,7 @@ extern float next_feedrate;
 
 extern uint8_t powerOnDemandState;
 extern unsigned long powerOnDemandTimer;
+extern unsigned long powerOnDemandEnergyTimer;
 
 #endif
 
@@ -304,15 +323,8 @@ void discardEnqueueingCommand();
 void discardCommandInBuffer();
 bool isCommandInBuffer();
 
-#ifdef NewPower
 void newPowerSleep();
 void newPowerWakeUp();
-#endif
-
-
-#ifdef NewSDRead
-extern bool isUltiGcode;
-#endif
 
 #ifdef SoftwareAutoLevel
 extern float touchPlateOffset;
@@ -322,13 +334,70 @@ extern float touchPlateOffset;
 #define FilamentAvailable() (!READ(FilamentDetectionPin))
 #endif
 
-extern uint8_t isBLEUpdate;
-extern unsigned long isBLEUpdateTimer;
+extern bool isWindowsServerStarted;
+extern bool isWindowsPrinting;
+extern bool isWindowsSD;
 
+extern bool isBedPreheat;
+
+void sleepAll();
+
+bool gateOpened();
 
 extern "C"{
 int freeMemory();
 }
+
+#define LANGUAGE_ENGLISH 0
+#define LANGUAGE_CHINESE 1
+#define LANGUAGE_KOREAN 2
+extern uint8_t languageType;
+
+void storeLanguage(uint8_t language);
+
+void retriveLanguage(uint8_t language);
+
+#define LS(a,b,c) (languageType==LANGUAGE_ENGLISH?a:(languageType==LANGUAGE_CHINESE?b:c))
+
+
+
+#define OVERLORD_TYPE_P     1
+#define OVERLORD_TYPE_M     2
+#define OVERLORD_TYPE_MB    3
+#define OVERLORD_TYPE_PNH   4
+#define OVERLORD_TYPE_MNH   5
+#define OVERLORD_TYPE_MBNH  6
+#define OVERLORD_TYPE_PNHW  7
+#define OVERLORD_TYPE_PNHL  8
+#define OVERLORD_TYPE_PS    9
+#define OVERLORD_TYPE_MS    10
+
+
+#define OVERLORD_TYPE_MIN    OVERLORD_TYPE_P
+#define OVERLORD_TYPE_MAX    OVERLORD_TYPE_MS
+
+
+extern bool Device_isGate;
+extern bool Device_isNewHeater;
+extern bool Device_isPro;
+extern bool Device_isWifi;
+extern bool Device_isBedHeat;
+extern bool Device_isLevelSensor;
+extern bool Device_isNewPCB;
+extern bool Device_isABS;
+extern bool Device_isPowerSaving;
+extern bool Device_isBattery;
+
+extern uint8_t Device_type;
+
+
+extern int FILAMENT_FORWARD_LENGTH;
+extern int FILAMENT_REVERSAL_LENGTH;
+extern int PID_MAX;
+
+void retrieveDevice();
+bool storeDevice(uint8_t type);
+
 
 
 #endif

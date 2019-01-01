@@ -5,6 +5,7 @@
 
 #ifdef ENABLE_ULTILCD2
 #include "UltiLCD2_low_lib.h"
+#include "stepper.h"
 
 void lcd_init();
 void lcd_update();
@@ -25,8 +26,8 @@ extern uint8_t led_mode;
 #define LED_MODE_BLINK_ON_DONE  3
 
 void lcd_menu_main();
-void lcd_menu_sleep();
 void lcd_menu_power_check();
+void lcd_menu_bluetooth();
 
 void doCooldown();//TODO
 

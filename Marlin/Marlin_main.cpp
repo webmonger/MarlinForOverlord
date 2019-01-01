@@ -49,9 +49,9 @@
 #include "UltiLCD2_menu_maintenance.h"
 #include "fitting_bed.h"
 
-#ifdef SDUPS
+#include <avr/sleep.h>
+
 #include "SDUPS.h"
-#endif
 
 #include "fitting_bed.h"
 
@@ -181,8 +181,8 @@ int saved_feedmultiply;
 int extrudemultiply[EXTRUDERS]=ARRAY_BY_EXTRUDERS(100, 100, 100); //100->1 200->2
 float current_position[NUM_AXIS] = { 0.0, 0.0, 0.0, 0.0 };
 float add_homeing[3]={0,0,0};
-float min_pos[3] = { X_MIN_POS, Y_MIN_POS, Z_MIN_POS };
-float max_pos[3] = { X_MAX_POS, Y_MAX_POS, Z_MAX_POS };
+float min_pos[3] = { 0, 0, 0 };
+float max_pos[3] = { 0, 0, 0 };
 // Extruder offset, only in XY plane
 #if EXTRUDERS > 1
 float extruder_offset[2][EXTRUDERS] = {
@@ -194,10 +194,8 @@ float extruder_offset[2][EXTRUDERS] = {
 uint8_t active_extruder = 0;
 uint8_t fanSpeed=0;
 uint8_t fanSpeedPercent=100;
-#ifdef SDUPS
 uint8_t targetFanSpeed=0;
 int targetFeedmultiply=0;
-#endif
 
 
 struct machinesettings {
@@ -241,12 +239,193 @@ float retract_recover_length=0, retract_recover_feedrate=25*60;
 
 uint8_t printing_state;
 
-#define RetractRecoverLengthAdd 1
+
+
+
+uint8_t Device_type = 0;
+
+bool Device_isGate = false;
+bool Device_isNewHeater = false;
+bool Device_isPro = false;
+bool Device_isWifi = false;
+bool Device_isBedHeat = false;
+bool Device_isLevelSensor = false;
+bool Device_isABS = false;
+bool Device_isPowerSaving = false;
+bool Device_isBattery = false;
+
+bool isBedPreheat = false;
+
+bool Device_isNewPCB = false;
+
+int PID_MAX = 160;
+
+int FILAMENT_FORWARD_LENGTH = FILAMENT_FORWARD_LENGTH_PRO;
+int FILAMENT_REVERSAL_LENGTH = FILAMENT_REVERSAL_LENGTH_PRO;
+
+bool storeDevice(uint8_t type)
+{
+  eeprom_write_byte((uint8_t*)EEPROM_DEVICE_OFFSET , type);
+  eeprom_write_byte((uint8_t*)EEPROM_DEVICE_OFFSET + 1 , type);
+  eeprom_write_byte((uint8_t*)EEPROM_DEVICE_OFFSET + 2 , type);
+  
+  return (eeprom_read_byte((uint8_t*)EEPROM_DEVICE_OFFSET) == type
+      && eeprom_read_byte((uint8_t*)EEPROM_DEVICE_OFFSET+1) == type
+      && eeprom_read_byte((uint8_t*)EEPROM_DEVICE_OFFSET+2) == type);
+}
+
+void retrieveDevice()
+{
+  WRITE(PCB_VERSION_PIN, HIGH);
+  SET_INPUT(PCB_VERSION_PIN);
+  delay(1);
+  if (READ(PCB_VERSION_PIN)) {
+    Device_isNewPCB = false; //old
+  }
+  else{
+    Device_isNewPCB = true; //new
+  }
+  
+  Device_type =  eeprom_read_byte((const uint8_t*)EEPROM_DEVICE_OFFSET);
+  if (Device_type != eeprom_read_byte((const uint8_t*)EEPROM_DEVICE_OFFSET+1)
+      || Device_type != eeprom_read_byte((const uint8_t*)EEPROM_DEVICE_OFFSET+2)) {
+    Device_type = 0;
+    return;
+  }
+  
+  switch (Device_type) {
+    case OVERLORD_TYPE_PNHW:
+      Device_isGate = false;
+      Device_isNewHeater = true;
+      Device_isPro = true;
+      Device_isWifi = true;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = false;
+      Device_isABS = true;
+      Device_isBattery = true;
+      break;
+    case OVERLORD_TYPE_PNHL:
+      Device_isGate = true;
+      Device_isNewHeater = true;
+      Device_isPro = true;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+     Device_isLevelSensor = false;
+      Device_isABS = false;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_PNH:
+      Device_isGate = false;
+      Device_isNewHeater = true;
+      Device_isPro = true;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = false;
+      Device_isABS = true;
+      Device_isBattery = true;
+      break;
+    case OVERLORD_TYPE_P:
+      Device_isGate = false;
+      Device_isNewHeater = false;
+      Device_isPro = true;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = false;
+      Device_isABS = true;
+      Device_isBattery = true;
+      break;
+    case OVERLORD_TYPE_MBNH:
+      Device_isGate = false;
+      Device_isNewHeater = true;
+      Device_isPro = false;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = false;
+      Device_isABS = true;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_MNH:
+      Device_isGate = false;
+      Device_isNewHeater = true;
+      Device_isPro = false;
+      Device_isWifi = false;
+      Device_isBedHeat = false;
+      Device_isLevelSensor = false;
+      Device_isABS = false;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_MB:
+      Device_isGate = false;
+      Device_isNewHeater = false;
+      Device_isPro = false;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = false;
+      Device_isABS = true;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_M:
+      Device_isGate = false;
+      Device_isNewHeater = false;
+      Device_isPro = false;
+      Device_isWifi = false;
+      Device_isBedHeat = false;
+      Device_isLevelSensor = false;
+      Device_isABS = false;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_PS:
+      Device_isGate = true;
+      Device_isNewHeater = true;
+      Device_isPro = true;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = true;
+      Device_isABS = true;
+      Device_isBattery = true;
+      break;
+    case OVERLORD_TYPE_MS:
+      Device_isGate = false;
+      Device_isNewHeater = true;
+      Device_isPro = false;
+      Device_isWifi = false;
+      Device_isBedHeat = false;
+      Device_isLevelSensor = true;
+      Device_isABS = false;
+      Device_isBattery = false;
+      break;
+    default:
+      Device_type = 0;
+      return;
+      break;
+  }
+  
+  if (Device_isNewHeater) {
+    PID_MAX = 255;
+  }
+  else{
+    PID_MAX = 160;
+  }
+
+  Device_isPowerSaving = Device_isNewPCB;
+  
+  if (Device_isPro) {
+    FILAMENT_FORWARD_LENGTH = FILAMENT_FORWARD_LENGTH_PRO;
+    FILAMENT_REVERSAL_LENGTH = FILAMENT_REVERSAL_LENGTH_PRO;
+  }
+  else{
+    FILAMENT_FORWARD_LENGTH = FILAMENT_FORWARD_LENGTH_MINI;
+    FILAMENT_REVERSAL_LENGTH = FILAMENT_REVERSAL_LENGTH_MINI;
+  }
+}
+
+
 
 #ifdef PowerOnDemand
 
 uint8_t powerOnDemandState=PowerOnDemandSleeping;
 unsigned long powerOnDemandTimer=millis();
+unsigned long powerOnDemandEnergyTimer=millis();
 #endif
 
 #ifdef SoftwareAutoLevel
@@ -254,18 +433,61 @@ float touchPlateOffset;
 uint8_t fittingBedTorque;
 #endif
 
+void wifiSDInit()
+{
+  SET_OUTPUT(SD_POWER_PIN);
+  SET_OUTPUT(SD_SELECT_PIN);
+  WRITE(SD_POWER_PIN, LOW);
+  WRITE(SD_SELECT_PIN, LOW);
+}
 
-uint8_t isBLEUpdate=0;
-unsigned long isBLEUpdateTimer=millis();
+
+bool isWindowsServerStarted = false;
+bool isWindowsPrinting = false;
+bool isWindowsSD = false;
+
+  #define WIFI_SD_OVERLORD 1
+  #define WIFI_SD_WINDOWS 2
+
+
+void wifiSDChangeMaster(uint8_t role)
+{
+  unsigned long timerLocal = millis();
+  if (role == WIFI_SD_OVERLORD) {
+    WRITE(SD_POWER_PIN, HIGH);
+    while (true) {
+      manage_heater();
+      manage_inactivity();
+      if (millis()-timerLocal>=1000UL) {
+        break;
+      }
+    }
+    WRITE(SD_SELECT_PIN, LOW);
+    WRITE(SD_POWER_PIN, LOW);
+    isWindowsSD = false;
+  }
+  else if (role == WIFI_SD_WINDOWS) {
+    isWindowsSD = true;
+    WRITE(SD_POWER_PIN, HIGH);
+    while (true) {
+      manage_heater();
+      manage_inactivity();
+      if (millis()-timerLocal>=1000UL) {
+        break;
+      }
+    }
+    WRITE(SD_SELECT_PIN, HIGH);
+    WRITE(SD_POWER_PIN, LOW);
+  }
+}
+
 
 //===========================================================================
 //=============================private variables=============================
 //===========================================================================
 const char axis_codes[NUM_AXIS] = {'X', 'Y', 'Z', 'E'};
 static float destination[NUM_AXIS] = {  0.0, 0.0, 0.0, 0.0};
-#ifdef DELTA
 static float delta[3] = {0.0, 0.0, 0.0};
-#endif
 static float offset[3] = {0.0, 0.0, 0.0};
 static bool home_all_axis = true;
 float feedrate = 1500.0, next_feedrate, saved_feedrate;
@@ -275,11 +497,11 @@ static bool relative_mode = false;  //Determines Absolute or Relative Coordinate
 
 static char cmdbuffer[BUFSIZE][MAX_CMD_SIZE];
 
-#define FromSerial 0
-#define FromFlash 1
-#define FromSDCard 2
+#define FromSerial -2
+#define FromFlash -3
+//#define FromSDCard 2
 
-static uint8_t commandFrom[BUFSIZE];
+static int32_t commandFrom[BUFSIZE];
 
 static int bufindr = 0;
 static int bufindw = 0;
@@ -324,19 +546,12 @@ static int enqueueingCommandBufIndex=0;
 static int enqueueingCommandLenth=0;
 static int enqueueingCommandIndex=0;
 
-#ifdef SDUPS
-
-#endif
-
-
-#ifdef NewSDRead
-bool isUltiGcode = true;
-#endif
-
 
 volatile uint8_t stepperTorqueX=0;
 volatile uint8_t stepperTorqueY=0;
 volatile uint8_t stepperTorqueZ=0;
+
+uint8_t languageType;
 
 //===========================================================================
 //=============================ROUTINES=============================
@@ -388,7 +603,7 @@ void enquecommand(const char *cmd)
   
   if (ramCommandBufPtr==NULL) {
     SERIAL_ECHOLN(freeMemory());
-    SERIAL_DEBUGPGM("Out of memory");
+    Stop(STOP_REASON_OUT_OF_MEMORY);
     return;
   }
   
@@ -407,7 +622,8 @@ void enquecommand(const char *cmd)
     isEnqueueingCommand = true;
   }
   else{
-    SERIAL_DEBUGPGM("enqueing full");
+    SERIAL_ERROR_START;
+    SERIAL_ERROR("enqueing full");
   }
 }
 
@@ -418,14 +634,15 @@ void enquecommand_P(const char *cmd)
     enqueueingFlashCommandBuf[(enqueueingCommandIndex + enqueueingCommandLenth) % EnqueueingCommandBufSize] = cmd;
     isEnqueueingRamCommand[(enqueueingCommandIndex + enqueueingCommandLenth) % EnqueueingCommandBufSize] =false;
     enqueueingCommandLenth += 1;
-    
-    SERIAL_DEBUGPGM("enqueing \"");
-    serialprintPGM(cmd);
-    SERIAL_DEBUGLNPGM("\"");
+
+//    SERIAL_DEBUGPGM("enqueing \"");
+//    SERIAL_DEBUGPGM(cmd);
+//    SERIAL_DEBUGLNPGM("\"");
     isEnqueueingCommand = true;
   }
   else{
-    SERIAL_DEBUGPGM("enqueing full");
+    SERIAL_ERROR_START;
+    SERIAL_ERROR("enqueing full");
   }
 }
 
@@ -441,8 +658,15 @@ uint8_t commands_queued()
 
 void discardEnqueueingCommand()
 {
+  for (int i=0; i<enqueueingCommandLenth; i++) {
+    if (isEnqueueingRamCommand[enqueueingCommandIndex]) {
+      free(enqueueingRamCommandBuf[enqueueingCommandIndex]);
+    }
+    enqueueingCommandIndex = (enqueueingCommandIndex + 1) % EnqueueingCommandBufSize;
+  }
   enqueueingCommandLenth=0;
   isEnqueueingCommand=false;
+  enqueueingCommandBufIndex =0;
 }
 
 void discardCommandInBuffer()
@@ -522,7 +746,6 @@ void servo_init()
 #endif
 }
 
-#ifdef NewPower
 
 void newPowerInit()
 {
@@ -540,6 +763,21 @@ void newPowerInit()
   SET_OUTPUT(SLEEP_PIN);
   WRITE(SLEEP_PIN, LOW);
 #endif
+
+#if ENERGE_PIN
+  SET_OUTPUT(ENERGE_PIN);
+  WRITE(ENERGE_PIN, HIGH);
+#endif
+}
+
+void newEnergeSleep()
+{
+  WRITE(ENERGE_PIN, LOW);
+}
+
+void newEnergeWakeUp()
+{
+  WRITE(ENERGE_PIN, HIGH);
 }
 
 void newPowerSleep()
@@ -552,14 +790,91 @@ void newPowerWakeUp()
   WRITE(SLEEP_PIN, HIGH);
 }
 
-#endif
+void sleepISR(){
+  sleep_disable();
+  detachInterrupt(4);
+  newEnergeWakeUp();
+  watchdog_reset();
+  watchdog_init();
+}
+
+void sleepAll(){
+//  SERIAL_DEBUGLN("sleeping");
+
+  lcd_lib_i2c_stop();
+
+  delayMicroseconds(10);
+  lcd_lib_RGB_off();
+  delayMicroseconds(10);
+  lcd_lib_oled_off();
+  watchdog_disable();
+
+  newPowerSleep();
+  newEnergeSleep();
+
+  delayMicroseconds(200);
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  sleep_enable();
+  attachInterrupt(4, sleepISR, LOW);
+
+  sleep_cpu();
+  delayMicroseconds(200);
+//  SERIAL_DEBUGLN("waking up");
+
+  powerOnDemandTimer=millis();
+  powerOnDemandEnergyTimer = millis();
+
+  lcd_clear_cache();
+  
+  lcd_lib_init();
+  lcd_lib_clear();
+
+}
 
 
+
+
+void gateInit()
+{
+  SET_INPUT(GATE_PIN);
+  WRITE(GATE_PIN, HIGH);
+}
+
+bool gateOpened()
+{
+  static bool gateState = false;
+  static uint8_t gateStateDelay = 0;
+  bool newGateState = READ(GATE_PIN);
+
+  if (gateState != newGateState)
+  {
+    if (gateStateDelay) {
+      gateStateDelay--;
+    }
+    else{
+      gateState = newGateState;
+    }
+  }else{
+    gateStateDelay = 20;
+  }
+
+  return gateState;
+}
+
+void storeLanguage(uint8_t language)
+{
+  eeprom_write_byte((uint8_t*)EEPROM_LANGUAGE_OFFSET, language);
+  languageType = language;
+}
+
+void retriveLanguage()
+{
+  languageType = eeprom_read_byte((const uint8_t*)EEPROM_LANGUAGE_OFFSET);
+}
 
 void setup()
 {
-  setup_killpin();
-  setup_powerhold();
+  // Check startup - does nothing if bootloader sets MCUSR to 0
   MYSERIAL.begin(BAUDRATE);
   SERIAL_PROTOCOLLNPGM("start");
   SERIAL_ECHO_START;
@@ -571,6 +886,16 @@ void setup()
   if(mcu & 4) SERIAL_ECHOLNPGM(MSG_BROWNOUT_RESET);
   if(mcu & 8) SERIAL_ECHOLNPGM(MSG_WATCHDOG_RESET);
   if(mcu & 32) SERIAL_ECHOLNPGM(MSG_SOFTWARE_RESET);
+  
+  retrieveDevice();
+  newPowerInit();
+  if (Device_isPowerSaving && !(mcu & 2) && (mcu & 1)) {
+    sleepAll();
+  }
+  setup_killpin();
+  setup_powerhold();
+  
+
   MCUSR=0;
   watchdog_disable();
   SERIAL_ECHOPGM(MSG_MARLIN);
@@ -599,19 +924,21 @@ void setup()
   // loads data from EEPROM if available else uses defaults (and resets step acceleration rate)
   Config_RetrieveSettings();
   lifetime_stats_init();
-  
-  SERIAL_DEBUGLNPGM("plainFactor:");
-  SERIAL_DEBUGLN(plainFactorA*1000000.0);
-  SERIAL_DEBUGLN(plainFactorB*1000000.0);
-  SERIAL_DEBUGLN(plainFactorC*1000000.0);
-  
-  SERIAL_DEBUGLNPGM("plainFactor:");
-  SERIAL_DEBUGLN(plainFactorAAC*1000000.0);
-  SERIAL_DEBUGLN(plainFactorBBC*1000000.0);
-  SERIAL_DEBUGLN(plainFactorCAC*1000000.0);
-  SERIAL_DEBUGLN(plainFactorCBC*1000000.0);
-  
-  
+
+//  SERIAL_DEBUGLNPGM("plainFactor:");
+//  SERIAL_DEBUGLN(plainFactorA*1000000.0);
+//  SERIAL_DEBUGLN(plainFactorB*1000000.0);
+//  SERIAL_DEBUGLN(plainFactorC*1000000.0);
+//
+//  SERIAL_DEBUGLNPGM("plainFactor:");
+//  SERIAL_DEBUGLN(plainFactorAAC*1000000.0);
+//  SERIAL_DEBUGLN(plainFactorBBC*1000000.0);
+//  SERIAL_DEBUGLN(plainFactorCAC*1000000.0);
+//  SERIAL_DEBUGLN(plainFactorCBC*1000000.0);
+//
+//  SERIAL_DEBUGPGM("PCB VERSION:");
+//  SERIAL_DEBUGLN((int)Device_isNewPCB);
+
   tp_init();    // Initialize temperature loop
   plan_init();  // Initialize planner;
   watchdog_init();
@@ -622,6 +949,10 @@ void setup()
   lcd_init();
   
   newPowerInit();
+  wifiSDInit();
+
+  gateInit();
+
 #if defined(CONTROLLERFAN_PIN) && CONTROLLERFAN_PIN > -1
   SET_OUTPUT(CONTROLLERFAN_PIN); //Set pin used for driver cooling fan
 #endif
@@ -631,12 +962,9 @@ void setup()
   SET_INPUT(FilamentDetectionPin);
   WRITE(FilamentDetectionPin, LOW);
 #endif
-  
-#ifdef GATE_PRINT
-  SET_INPUT(GATE_PIN);
-  WRITE(GATE_PIN, HIGH);
-#endif
-  
+
+  retriveLanguage();
+  SERIAL_DEBUGLN((int)Device_type);
 }
 
 void calculate_delta_reverse(float theDelta[3], float theResult[3]);
@@ -652,9 +980,9 @@ void loop()
   //        SERIAL_DEBUGLNPGM("freeMemory");
   //        SERIAL_DEBUGLN(freeMemory());
   //    }
-  
-#ifdef OVERLORD_WIFI
-  
+
+  if (Device_isWifi) {
+
   static uint8_t powerAtomFlag = 0;
   static unsigned long powerAtomTimer = millis();
   
@@ -678,7 +1006,7 @@ void loop()
       break;
   }
   
-#endif
+  }
   
   manualLevelRoutine();
   
@@ -875,7 +1203,7 @@ void get_command()
     //    serialprintPGM(enqueueingFlashCommandBuf[enqueueingCommandIndex]);
     
     while (buflen < BUFSIZE) {
-      if (isEnqueueingRamCommand[enqueueingCommandIndex] == true) {
+      if (isEnqueueingRamCommand[enqueueingCommandIndex]) {
         serial_char = *(enqueueingRamCommandBuf[enqueueingCommandIndex]+enqueueingCommandBufIndex);
       }
       else{
@@ -892,6 +1220,16 @@ void get_command()
         if(serial_count){
           cmdbuffer[bufindw][serial_count] = 0; //terminate string
           commandFrom[bufindw] = FromFlash;
+
+//          if (isEnqueueingRamCommand[enqueueingCommandIndex])
+//          {
+//            SERIAL_DEBUGPGM("Ram:");
+//          }
+//          else{
+//            SERIAL_DEBUGPGM("Flash:");
+//          }
+//          SERIAL_DEBUGLN(cmdbuffer[bufindw]);
+
           buflen += 1;
           bufindw = (bufindw + 1)%BUFSIZE;
           comment_mode = false; //for new command
@@ -931,169 +1269,65 @@ void get_command()
   
   
   if (card.sdprinting && serial_count==0 && !isEnqueueingCommand && !card.pause) {
-    
-    if (isUltiGcode) {
-      
-      while (buflen < BUFSIZE) {
-        
-        if (movesplanned() <= (BLOCK_BUFFER_SIZE/2) && buflen) {
-          return;
-        }
-        
-        card.fgets(cmdbuffer[bufindw], MAX_CMD_SIZE);
-        
-        if (card.errorCode())
-        {
-          SERIAL_ECHOLNPGM("sd error");
-          if (!card.sdInserted)
-          {
-            //            serial_count = 0;
-            return;
-          }
-          
-          //On an error, reset the error, reset the file position and try again.
-#ifdef ClearError
-          card.clearError();
-#endif
-          //          serial_count = 0;
-          //Screw it, if we are near the end of a file with an error, act if the file is finished. Hopefully preventing the hang at the end.
-          if (card.getFilePos() > card.getFileSize() - 512)
-            card.sdprinting = false;
-          else
-            card.setIndex(card.getFilePos());
-          return;
-        }
-        
-        
-        if (cmdbuffer[bufindw][0]=='M')
-        {
-          if (!strncmp_P(cmdbuffer[bufindw], PSTR("M25"),3)) {
-            SERIAL_PROTOCOLLNPGM("M25 received");
-            card.sdprinting=false;
-            return;
-          }
-        }
-        else if (cmdbuffer[bufindw][0]==';') {
-          //          SERIAL_ECHOLNPGM("comment:");
-          //          SERIAL_ECHOLN(cmdbuffer[bufindw]);
-          
-#ifdef SDUPS
-          if (!strncmp_P(cmdbuffer[bufindw], PSTR(";LAYER:"), 7)) {
-            SDUPSStorePosition(card.getFilePos());
-            char buffer[32];
-            
-            if (targetFanSpeed) {
-              int nextFanSpeed=lround(int(fanSpeed)*100/float(fanSpeedPercent)) +64;
-              if (nextFanSpeed>=targetFanSpeed) {
-                nextFanSpeed=targetFanSpeed;
-                targetFanSpeed=0;
-              }
-              
-              sprintf_P(buffer, PSTR("M106 S%i"), nextFanSpeed);
-              enquecommand(buffer);
-            }
-            
-            if (targetFeedmultiply) {
-              int feedmultiplyBuf=feedmultiply+20;
-              
-              if (targetFeedmultiply<=feedmultiplyBuf) {
-                feedmultiplyBuf=targetFeedmultiply;
-                targetFeedmultiply=0;
-              }
-              
-              sprintf_P(buffer, PSTR("M220 S%i"), feedmultiplyBuf);
-              enquecommand(buffer);
-            }
-            if (targetFanSpeed || targetFeedmultiply) {
-              break;    //break here to run the enquecommand.
-            }
-          }
-          
-#endif
-          
-          continue;
-        }
-        
-        commandFrom[bufindw] = FromSDCard;
-        buflen += 1;
-        bufindw = (bufindw + 1)%BUFSIZE;
+
+    while (buflen < BUFSIZE) {
+      if (card.eof())
+      {
+//        SERIAL_DEBUGLNPGM("card EOF");
+        card.sdprinting=false;
+        return;
       }
-      
-    }
-    else{
-      static uint32_t endOfLineFilePosition = 0;
-      while( !card.eof()  && buflen < BUFSIZE) {
-        int16_t n=card.get();
-        if (card.errorCode())
+
+      if (movesplanned() <= (BLOCK_BUFFER_SIZE/2) && buflen) {
+        return;
+      }
+
+      card.fgets(cmdbuffer[bufindw], MAX_CMD_SIZE);
+
+      //      SERIAL_DEBUGPGM("sdraw:");
+      //      SERIAL_DEBUGLN(cmdbuffer[bufindw]);
+
+      if (card.errorCode())
+      {
+//        SERIAL_ECHOLNPGM("sd error");
+        if (!card.sdInserted)
         {
-          SERIAL_ECHOLNPGM("sd error");
-          //        cardDebug=true;
-          if (!card.sdInserted)
-          {
-            serial_count = 0;
-            return;
-          }
-          
-          //On an error, reset the error, reset the file position and try again.
-#ifdef ClearError
-          card.clearError();
-#endif
-          serial_count = 0;
-          //Screw it, if we are near the end of a file with an error, act if the file is finished. Hopefully preventing the hang at the end.
-          if (endOfLineFilePosition > card.getFileSize() - 512)
-            card.sdprinting = false;
-          else
-            card.setIndex(endOfLineFilePosition);
+          //            serial_count = 0;
+          card.sdprinting = false;
           return;
         }
-        
-        serial_char = (char)n;
-        if(serial_char == '\n' ||
-           serial_char == '\r' ||
-           (serial_char == ':' && comment_mode == false) ||
-           serial_count >= (MAX_CMD_SIZE - 1)||n==-1)
-        {
-          if(card.eof() || n==-1){
-            SERIAL_PROTOCOLLNPGM(MSG_FILE_PRINTED);
-            stoptime=millis();
-            char time[30];
-            unsigned long t=(stoptime-starttime)/1000;
-            int hours, minutes;
-            minutes=(t/60)%60;
-            hours=t/60/60;
-            sprintf_P(time, PSTR("%i hours %i minutes"),hours, minutes);
-            SERIAL_ECHO_START;
-            SERIAL_ECHOLN(time);
-            lcd_setstatus(time);
-            card.printingHasFinished();
-            previous_millis_cmd=millis();
-            isUltiGcode=true;
-            card.checkautostart(true);
-            
-          }
-          if(!serial_count)
-          {
-            comment_mode = false; //for new command
-            return; //if empty line
-          }
-          cmdbuffer[bufindw][serial_count] = 0; //terminate string
-          //      if(!comment_mode){
-          commandFrom[bufindw] = FromSDCard;
-          buflen += 1;
-          bufindw = (bufindw + 1)%BUFSIZE;
-          //      }
-          comment_mode = false; //for new command
-          serial_count = 0; //clear buffer
-          endOfLineFilePosition  = card.getFilePos();
+
+        //On an error, reset the error, reset the file position and try again.
+  #ifdef ClearError
+        card.clearError();
+  #endif
+        if (card.pause == true) {
+          card.sdprinting = false;
+          return;
         }
+        //          serial_count = 0;
+        //Screw it, if we are near the end of a file with an error, act if the file is finished. Hopefully preventing the hang at the end.
+        if (card.getFilePos() > card.getFileSize() - 1024)
+          card.sdprinting = false;
         else
-        {
-          if(serial_char == ';') comment_mode = true;
-          if(!comment_mode){
-            cmdbuffer[bufindw][serial_count++] = serial_char;
-          }
-        }
+          card.setIndex(card.getFilePos());
+        return;
       }
+
+      if (cmdbuffer[bufindw][0]==';') {
+        continue;
+      }
+
+      strchr_pointer = strchr(cmdbuffer[bufindw], ';');
+      if (strchr_pointer != NULL) {
+        *strchr_pointer = 0;
+      }
+      //      SERIAL_DEBUGPGM("sd:");
+      //      SERIAL_DEBUGLN(cmdbuffer[bufindw]);
+
+      commandFrom[bufindw] = card.getFilePos();
+      buflen += 1;
+      bufindw = (bufindw + 1)%BUFSIZE;
     }
     
     
@@ -1108,12 +1342,12 @@ void get_command()
 
 float code_value()
 {
-  return (strtod(&cmdbuffer[bufindr][strchr_pointer - cmdbuffer[bufindr] + 1], NULL));
+  return (strtod(strchr_pointer + 1, NULL));
 }
 
 long code_value_long()
 {
-  return (strtol(&cmdbuffer[bufindr][strchr_pointer - cmdbuffer[bufindr] + 1], NULL, 10));
+  return (strtol(strchr_pointer + 1, NULL, 10));
 }
 
 bool code_seen(char code)
@@ -1140,10 +1374,41 @@ static const PROGMEM type array##_P[3] =        \
 static inline type array(int axis)          \
 { return pgm_read_any(&array##_P[axis]); }
 
-XYZ_CONSTS_FROM_CONFIG(float, base_min_pos,    MIN_POS);
-XYZ_CONSTS_FROM_CONFIG(float, base_max_pos,    MAX_POS);
-XYZ_CONSTS_FROM_CONFIG(float, base_home_pos,   HOME_POS);
-XYZ_CONSTS_FROM_CONFIG(float, max_length,      MAX_LENGTH);
+
+XYZ_CONSTS_FROM_CONFIG(float, base_min_pos_GATE,    MIN_POS_GATE);
+XYZ_CONSTS_FROM_CONFIG(float, base_max_pos_GATE,    MAX_POS_GATE);
+XYZ_CONSTS_FROM_CONFIG(float, base_home_pos_GATE,   HOME_POS_GATE);
+XYZ_CONSTS_FROM_CONFIG(float, max_length_GATE,      MAX_LENGTH_GATE);
+
+XYZ_CONSTS_FROM_CONFIG(float, base_min_pos_PRO,    MIN_POS_PRO);
+XYZ_CONSTS_FROM_CONFIG(float, base_max_pos_PRO,    MAX_POS_PRO);
+XYZ_CONSTS_FROM_CONFIG(float, base_home_pos_PRO,   HOME_POS_PRO);
+XYZ_CONSTS_FROM_CONFIG(float, max_length_PRO,      MAX_LENGTH_PRO);
+
+XYZ_CONSTS_FROM_CONFIG(float, base_min_pos_MINI,    MIN_POS_MINI);
+XYZ_CONSTS_FROM_CONFIG(float, base_max_pos_MINI,    MAX_POS_MINI);
+XYZ_CONSTS_FROM_CONFIG(float, base_home_pos_MINI,   HOME_POS_MINI);
+XYZ_CONSTS_FROM_CONFIG(float, max_length_MINI,      MAX_LENGTH_MINI);
+
+#define XYZ_CONSTS_READ(type, array)  \
+static inline type array(int axis)  \
+{ \
+  if (Device_isGate) {  \
+    return pgm_read_any(&array ## _GATE_P[axis]);  \
+  } \
+  else if (Device_isPro){ \
+    return pgm_read_any(&array ## _PRO_P[axis]); \
+  } \
+  else {  \
+    return pgm_read_any(&array ## _MINI_P[axis]);  \
+  } \
+}
+
+XYZ_CONSTS_READ(float, base_min_pos);
+XYZ_CONSTS_READ(float, base_max_pos);
+XYZ_CONSTS_READ(float, base_home_pos);
+XYZ_CONSTS_READ(float, max_length);
+
 XYZ_CONSTS_FROM_CONFIG(float, home_retract_mm, HOME_RETRACT_MM);
 XYZ_CONSTS_FROM_CONFIG(signed char, home_dir,  HOME_DIR);
 
@@ -1176,7 +1441,21 @@ static void homeaxis(int axis) {
     {
       SERIAL_ERROR_START;
       SERIAL_ERRORLNPGM("Endstop not pressed after homing down. Endstop broken?");
-      Stop(STOP_REASON_XY_ENDSTOP_BROKEN_ERROR);
+      switch (axis) {
+      case X_AXIS:
+        Stop(STOP_REASON_X_ENDSTOP_BROKEN_ERROR);
+        break;
+      case Y_AXIS:
+        Stop(STOP_REASON_Y_ENDSTOP_BROKEN_ERROR);
+        break;
+      case Z_AXIS:
+        Stop(STOP_REASON_Z_ENDSTOP_BROKEN_ERROR);
+        break;
+      default:
+        Stop(STOP_REASON_X_ENDSTOP_BROKEN_ERROR);
+        break;
+      }
+
       return;
     }
     
@@ -1218,8 +1497,22 @@ static void homeaxis(int axis) {
     {
       SERIAL_ERROR_START;
       SERIAL_ERRORLNPGM("Endstop still pressed after backing off. Endstop stuck?");
-      Stop(STOP_REASON_XY_ENDSTOP_STUCK_ERROR);
       endstops_hit_on_purpose();
+
+      switch (axis) {
+      case X_AXIS:
+        Stop(STOP_REASON_X_ENDSTOP_STUCK_ERROR);
+        break;
+      case Y_AXIS:
+        Stop(STOP_REASON_Y_ENDSTOP_STUCK_ERROR);
+        break;
+      case Z_AXIS:
+        Stop(STOP_REASON_Z_ENDSTOP_STUCK_ERROR);
+        break;
+      default:
+        Stop(STOP_REASON_X_ENDSTOP_STUCK_ERROR);
+        break;
+      }
       return;
     }
     
@@ -1291,7 +1584,7 @@ void setStepperTorque(uint8_t theTorqueX, uint8_t theTorqueY, uint8_t theTorqueZ
   else{
     
     TCNT3 = 0;
-    ICR3=8*(5)-1;
+    ICR3=8*(2)-1;
     
     TCCR3B = _BV(WGM33)|_BV(WGM32)|_BV(CS30);     //set the ctc mode
     TCCR3A = 0;                         //set the ctc mode and no compare output
@@ -1302,6 +1595,11 @@ void setStepperTorque(uint8_t theTorqueX, uint8_t theTorqueY, uint8_t theTorqueZ
 
 void level_abort()
 {
+  add_homeing[Z_AXIS] = 1.0/plainFactorC;
+  add_homeing[Z_AXIS] -= -ADDING_Z_FOR_POSITIVE;
+  add_homeing[Z_AXIS] -= touchPlateOffset;
+  fittingBedUpdateK();
+  
   discardEnqueueingCommand();
   discardCommandInBuffer();
   quickStop();
@@ -1389,7 +1687,7 @@ void process_commands()
           destination[X_AXIS]=current_position[X_AXIS];
           destination[Y_AXIS]=current_position[Y_AXIS];
           destination[Z_AXIS]=current_position[Z_AXIS];
-          destination[E_AXIS]=current_position[E_AXIS]+retract_recover_length+RetractRecoverLengthAdd;
+          destination[E_AXIS]=current_position[E_AXIS]+retract_recover_length;
           float oldFeedrate = feedrate;
           feedrate=retract_recover_feedrate;
           retracted=false;
@@ -1415,7 +1713,6 @@ void process_commands()
           destination[i] = current_position[i];
         }
         feedrate = 0.0;
-        
 #ifdef DELTA
         // A delta can only safely home all axis at the same time
         // all axis have to home at the same time
@@ -1426,9 +1723,9 @@ void process_commands()
         current_position[Z_AXIS] = 0;
         plan_set_position_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
         
-        destination[X_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Y_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Z_AXIS] = 2 * Z_MAX_LENGTH;
+      destination[X_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Y_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Z_AXIS] = 2 * max_length(Z_AXIS);
         feedrate = 1.732 * homing_feedrate[X_AXIS];
         plan_buffer_line_old(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
         st_synchronize();
@@ -1576,7 +1873,11 @@ void process_commands()
         char serialBuffer[30];
         float add_homeing_z_back_up;
         
-        fittingBedTorque=18;
+      long st_get_position_array[3];
+      
+      unsigned long torqueIndexTimer;
+
+      fittingBedTorque=19;
         
         fittingBedResetK();
         fittingBedArrayInit();
@@ -1597,7 +1898,6 @@ void process_commands()
         }
         feedrate = 0.0;
         
-#ifdef DELTA
         // A delta can only safely home all axis at the same time
         // all axis have to home at the same time
         
@@ -1611,16 +1911,15 @@ void process_commands()
         current_position[Z_AXIS] = 0;
         plan_set_position_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
         
-        destination[X_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Y_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Z_AXIS] = 2 * Z_MAX_LENGTH;
+      destination[X_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Y_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Z_AXIS] = 2 * max_length(Z_AXIS);
         feedrate = 1.732 * homing_feedrate[X_AXIS];
         plan_buffer_line_old(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
         st_synchronize();
         endstops_hit_on_purpose();
         
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
@@ -1632,74 +1931,136 @@ void process_commands()
         // take care of back off and rehome now we are all at the top
         HOMEAXIS(X);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         
         HOMEAXIS(Y);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         
         HOMEAXIS(Z);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         
         plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
         
-        long st_get_position_array[3];
+      if (Device_isLevelSensor) {
         
-        for (int index=0; index<NodeNum; index++) {
+        for (int i=0; i<3; i++) {
+          st_get_position_array[i]= st_get_position(i);
+        }
+        
+        feedrate=homing_feedrate[X_AXIS];
+        destination[X_AXIS]=0;
+        destination[Y_AXIS]=0;
+        destination[Z_AXIS]=10;
+        st_synchronize();
+        plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+        st_synchronize();
+      }
+      
+      for (int index=0; index<NodeNum; index++) {
+        //key:
+        //        index = 5;
+        //unlock the z probe
+
+        if (Device_isLevelSensor) {
+          feedrate=2000;
           
-          //unlock the z probe
-          feedrate=homing_feedrate[X_AXIS]*2.5;
-          destination[X_AXIS]=0;
-          destination[Y_AXIS]=0;
-          destination[Z_AXIS]=10;
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          st_synchronize();
-          
-          if (printing_state==PRINT_STATE_HOMING_ABORT) {
-            add_homeing[Z_AXIS] = add_homeing_z_back_up;
-            level_abort();
-            return;
-          }
-          
-          destination[Z_AXIS] = 0;
+          destination[Z_AXIS] = 5;
           destination[X_AXIS] = fittingBedArray[index][X_AXIS];
           destination[Y_AXIS] = fittingBedArray[index][Y_AXIS];
           plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
           st_synchronize();
           
           if (printing_state==PRINT_STATE_HOMING_ABORT) {
-            add_homeing[Z_AXIS] = add_homeing_z_back_up;
             level_abort();
             return;
           }
           
-          feedrate=250;
+          destination[Z_AXIS]=-10;
           
+          destination[Y_AXIS]+=20;
+          
+          feedrate=1000;
+          
+          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+          
+          destination[Y_AXIS]-=20;
+          
+          st_synchronize();
+          
+          feedrate=2000;
+          
+          if (printing_state==PRINT_STATE_HOMING_ABORT) {
+            level_abort();
+            setStepperTorque(-1,-1,-1);
+            return;
+          }
+          
+          endstops_hit_on_purpose();
+          
+          for (int axisIndex=0; axisIndex<3; axisIndex++) {
+            delta[axisIndex]=base_home_pos(Z_AXIS)+((st_get_position(axisIndex)-st_get_position_array[axisIndex])/STEPS_PER_UNIT_DELTA)+sqrt(sq(DELTA_DIAGONAL_ROD)- square(DELTA_RADIUS))+ADDING_Z_FOR_POSITIVE;
+          }
+          
+          calculate_delta_reverse(delta,fittingBedArray[index]);
+          
+//          fittingBedArray[index][Z_AXIS] = 10.0 - (st_get_position_array[X_AXIS] - st_get_position(X_AXIS))/STEPS_PER_UNIT_DELTA + ADDING_Z_FOR_POSITIVE;
+          destination[Z_AXIS] = fittingBedArray[index][Z_AXIS] - ADDING_Z_FOR_POSITIVE;
+          
+          plan_set_position(fittingBedArray[index][X_AXIS], fittingBedArray[index][Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
+          destination[Z_AXIS] = 5;
+          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+          st_synchronize();
+        }
+        else{
+          
+          feedrate=homing_feedrate[X_AXIS]*1.8;
+          destination[X_AXIS]=0;
+          destination[Y_AXIS]=0;
+          destination[Z_AXIS]=10;
+          st_synchronize();
+          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+          st_synchronize();
+          
+          if (printing_state==PRINT_STATE_HOMING_ABORT) {
+            level_abort();
+            return;
+          }
+          
+          destination[Z_AXIS] = 2;
+          destination[X_AXIS] = fittingBedArray[index][X_AXIS];
+          destination[Y_AXIS] = fittingBedArray[index][Y_AXIS];
+          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+          st_synchronize();
+          
+          if (printing_state==PRINT_STATE_HOMING_ABORT) {
+            level_abort();
+            return;
+          }
+          
+          feedrate=800;
           switch (index) {
             case 0:
-              setStepperTorque(fittingBedTorque,fittingBedTorque,fittingBedTorque-2);
+              setStepperTorque(fittingBedTorque,fittingBedTorque,fittingBedTorque-1);
               break;
             case 1:
               setStepperTorque(fittingBedTorque-1,fittingBedTorque,fittingBedTorque-1);
               break;
             case 2:
-              setStepperTorque(fittingBedTorque-2,fittingBedTorque,fittingBedTorque);
+              setStepperTorque(fittingBedTorque-1,fittingBedTorque,fittingBedTorque);
               break;
             case 3:
               setStepperTorque(fittingBedTorque-1,fittingBedTorque-1,fittingBedTorque);
               break;
             case 4:
-              setStepperTorque(fittingBedTorque,fittingBedTorque-2,fittingBedTorque);
+              setStepperTorque(fittingBedTorque,fittingBedTorque-1,fittingBedTorque);
               break;
             case 5:
               setStepperTorque(fittingBedTorque,fittingBedTorque-1,fittingBedTorque-1);
@@ -1708,63 +2069,61 @@ void process_commands()
               break;
           }
           
-          
-          
-          setStepperTorque(fittingBedTorque,fittingBedTorque,fittingBedTorque);
-          
-          destination[Z_AXIS]=-10;
+          destination[Z_AXIS]=-5;
           
           plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
           
           st_synchronize();
           if (printing_state==PRINT_STATE_HOMING_ABORT) {
-            add_homeing[Z_AXIS] = add_homeing_z_back_up;
             level_abort();
             setStepperTorque(-1,-1,-1);
             return;
           }
           
-          feedrate=800;
+          torqueIndexTimer = millis();
           
-          
-          for (int torqueIndex=fittingBedTorque; torqueIndex>=8; torqueIndex--) {
-            
-            
-            
-            
-            setStepperTorque(torqueIndex,torqueIndex,torqueIndex);
-            
-            destination[Z_AXIS]=-9.5;
-            
-            plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-            
-            st_synchronize();
-            if (printing_state==PRINT_STATE_HOMING_ABORT) {
-              add_homeing[Z_AXIS] = add_homeing_z_back_up;
-              level_abort();
-              setStepperTorque(-1,-1,-1);
-              return;
+          while (1) {
+            if (millis()-torqueIndexTimer>200) {             //millis()-torqueIndexTimer<50 may cause the problem
+              break;
             }
-            
+            manage_heater();
+            manage_inactivity();
+            lcd_update();
+          }
+          
+          setStepperTorque(0,0,0);
+          torqueIndexTimer = millis();
+          
+          while (1) {
+            if (millis()-torqueIndexTimer>500) {             //millis()-torqueIndexTimer<50 may cause the problem
+              break;
+            }
+            manage_heater();
+            manage_inactivity();
+            lcd_update();
+          }
+          
+          
+          for (int torqueIndex=fittingBedTorque+1; torqueIndex>=14; torqueIndex--) {
             
             switch (index) {
               case 0:
-                setStepperTorque(torqueIndex,torqueIndex,torqueIndex-3);
+                setStepperTorque(torqueIndex,torqueIndex,torqueIndex-1);
                 break;
               case 1:
-                setStepperTorque(torqueIndex-3,torqueIndex,torqueIndex-3);
+                setStepperTorque(torqueIndex-1,torqueIndex,torqueIndex-1);
                 break;
               case 2:
-                setStepperTorque(torqueIndex-3,torqueIndex,torqueIndex);
+                setStepperTorque(torqueIndex-1,torqueIndex,torqueIndex);
                 break;
               case 3:
-                setStepperTorque(torqueIndex-3,torqueIndex-3,torqueIndex);
+                setStepperTorque(torqueIndex-1,torqueIndex-1,torqueIndex);
                 break;
               case 4:
-                setStepperTorque(torqueIndex,torqueIndex-3,torqueIndex);
+                setStepperTorque(torqueIndex,torqueIndex-1,torqueIndex);
                 break;
               case 5:
-                setStepperTorque(torqueIndex,torqueIndex-3,torqueIndex-3);
+                setStepperTorque(torqueIndex,torqueIndex-1,torqueIndex-1);
                 break;
                 
                 
@@ -1772,24 +2131,33 @@ void process_commands()
                 break;
             }
             
-            
-            destination[Z_AXIS]=-8;
+            destination[Z_AXIS]=0;
             plan_set_position(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
             
-            destination[Z_AXIS]=-10;
+            destination[Z_AXIS]=1.9;
             
             plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
             
             st_synchronize();
             if (printing_state==PRINT_STATE_HOMING_ABORT) {
-              add_homeing[Z_AXIS] = add_homeing_z_back_up;
               level_abort();
               setStepperTorque(-1,-1,-1);
               return;
             }
             
+            destination[Z_AXIS]=0;
+            plan_set_position(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
+            
+            destination[Z_AXIS]=-2.0;
+            plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+            
+            st_synchronize();
+            if (printing_state==PRINT_STATE_HOMING_ABORT) {
+              level_abort();
+              setStepperTorque(-1,-1,-1);
+              return;
+            }
           }
-          
           
           current_position[X_AXIS]=0;
           current_position[Y_AXIS]=0;
@@ -1797,52 +2165,63 @@ void process_commands()
           
           plan_set_position_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
           
-          
-          
-          
-          //          current_position[X_AXIS]=-2;
-          //          current_position[Y_AXIS]=-2;
-          //          current_position[Z_AXIS]=-2;
-          //
-          //          feedrate=500;
-          //
-          //          plan_buffer_line_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate/60, active_extruder);
-          //
-          //
-          //          current_position[X_AXIS]=-1.5;
-          //          current_position[Y_AXIS]=-1.5;
-          //          current_position[Z_AXIS]=-1.5;
-          //
-          //          plan_buffer_line_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate/60, active_extruder);
-          //
-          //
-          //          st_synchronize();
-          
-          
-          
-          
-          unsigned long torqueIndexTimer;
-          
-          //          torqueIndexTimer=millis();
-          //          setStepperTorque(0,0,0);
-          //
-          //          while (1) {
-          //            if (millis()-torqueIndexTimer>200) {   //millis()-torqueIndexTimer<50 may cause the problem
-          //              break;
-          //            }
-          //            manage_heater();
-          //            manage_inactivity();
-          //            lcd_update();
-          //          }
-          //
-          
-          for (uint8_t torqueIndex=12; torqueIndex<22; torqueIndex+=1) {
-            setStepperTorque(torqueIndex,torqueIndex,torqueIndex);
+          for (uint8_t torqueIndex=14; torqueIndex<=22; torqueIndex++) {
+            
+            switch (index) {
+              case 0:
+                setStepperTorque(torqueIndex,torqueIndex,torqueIndex-1);
+                break;
+              case 1:
+                setStepperTorque(torqueIndex-1,torqueIndex,torqueIndex-1);
+                break;
+              case 2:
+                setStepperTorque(torqueIndex-1,torqueIndex,torqueIndex);
+                break;
+              case 3:
+                setStepperTorque(torqueIndex-1,torqueIndex-1,torqueIndex);
+                break;
+              case 4:
+                setStepperTorque(torqueIndex,torqueIndex-1,torqueIndex);
+                break;
+              case 5:
+                setStepperTorque(torqueIndex,torqueIndex-1,torqueIndex-1);
+                break;
+              default:
+                break;
+            }
+            
+            
+            feedrate=200;
+            
+            destination[Z_AXIS]=0;
+            plan_set_position(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
+            
+            destination[Z_AXIS]=0.1;
+            
+            plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+            
+            st_synchronize();
+            
+            destination[Z_AXIS]=0;
+            plan_set_position(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
+            
+            if (torqueIndex<=17) {
+              destination[Z_AXIS]=-0.18;
+            }
+            else{
+              destination[Z_AXIS]=-0.11;
+            }
+            
+            plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+            
+            st_synchronize();
+            
+            //          setStepperTorque(0,0,0);
             
             torqueIndexTimer=millis();
             
             while (1) {
-              if (millis()-torqueIndexTimer>80) {   //millis()-torqueIndexTimer<50 may cause the problem
+              if (millis()-torqueIndexTimer>100) {   //millis()-torqueIndexTimer<50 may cause the problem
                 break;
               }
               manage_heater();
@@ -1854,8 +2233,31 @@ void process_commands()
           
           setStepperTorque(-1,-1,-1);
           
+          torqueIndexTimer=millis();
+          
+          while (true) {
+            if (millis()-torqueIndexTimer>200) {             //millis()-torqueIndexTimer<50 may cause the problem
+              break;
+            }
+            manage_heater();
+            manage_inactivity();
+            lcd_update();
+          }
+          
+          //        feedrate=2000;
+          //
+          //        destination[Z_AXIS]=0;
+          //        plan_set_position(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
+          //
+          //        destination[Z_AXIS]=10;
+          //
+          //        plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+          //
+          //
+          //        goto key;
+          
+          
           if (printing_state==PRINT_STATE_HOMING_ABORT) {
-            add_homeing[Z_AXIS] = add_homeing_z_back_up;
             level_abort();
             return;
           }
@@ -1881,7 +2283,6 @@ void process_commands()
           st_synchronize();
           
           if (printing_state==PRINT_STATE_HOMING_ABORT) {
-            add_homeing[Z_AXIS] = add_homeing_z_back_up;
             level_abort();
             return;
           }
@@ -1899,7 +2300,6 @@ void process_commands()
             st_synchronize();
             
             if (printing_state==PRINT_STATE_HOMING_ABORT) {
-              add_homeing[Z_AXIS] = add_homeing_z_back_up;
               level_abort();
               return;
             }
@@ -1910,7 +2310,6 @@ void process_commands()
             st_synchronize();
             
             if (printing_state==PRINT_STATE_HOMING_ABORT) {
-              add_homeing[Z_AXIS] = add_homeing_z_back_up;
               level_abort();
               return;
             }
@@ -1923,7 +2322,6 @@ void process_commands()
             st_synchronize();
             
             if (printing_state==PRINT_STATE_HOMING_ABORT) {
-              add_homeing[Z_AXIS] = add_homeing_z_back_up;
               level_abort();
               return;
             }
@@ -1936,35 +2334,38 @@ void process_commands()
           }
           
           calculate_delta_reverse(delta,fittingBedArray[index]);
-          
-          
-          SERIAL_DEBUGLNPGM("fittingBedArray");
-          SERIAL_DEBUG("G1 F2000 X");
-          SERIAL_DEBUG(dtostrf(fittingBedArray[index][X_AXIS], 10, 10, serialBuffer));
-          SERIAL_DEBUG(" Y");
-          SERIAL_DEBUG(dtostrf(fittingBedArray[index][Y_AXIS], 10, 10, serialBuffer));
-          SERIAL_DEBUG(" Z");
-          SERIAL_DEBUGLN(dtostrf(fittingBedArray[index][Z_AXIS]+1, 10, 10, serialBuffer));
-          
           plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+
         }
+
+       
+
+        SERIAL_BED_DEBUGLNPGM("fittingBedArray");
+        SERIAL_BED_DEBUG("G1 F4000 X");
+        SERIAL_BED_DEBUG(dtostrf(fittingBedArray[index][X_AXIS], 10, 10, serialBuffer));
+        SERIAL_BED_DEBUG(" Y");
+        SERIAL_BED_DEBUG(dtostrf(fittingBedArray[index][Y_AXIS], 10, 10, serialBuffer));
+        SERIAL_BED_DEBUG(" Z");
+        SERIAL_BED_DEBUGLN(dtostrf(fittingBedArray[index][Z_AXIS]-ADDING_Z_FOR_POSITIVE, 10, 10, serialBuffer));
+
+      }
         
-        SERIAL_DEBUGLNPGM("add_homeing[Z_AXIS]");
-        SERIAL_DEBUGLN(add_homeing[Z_AXIS]);
-        SERIAL_DEBUGLN(current_position[Z_AXIS]);
+      SERIAL_BED_DEBUGLNPGM("add_homeing[Z_AXIS]");
+      SERIAL_BED_DEBUGLN(add_homeing[Z_AXIS]);
+      SERIAL_BED_DEBUGLN(current_position[Z_AXIS]);
         
         fittingBed();
         
-        SERIAL_DEBUGLNPGM("fittingBed");
-        SERIAL_DEBUGLN(dtostrf(plainFactorA, 10, 15, serialBuffer));
-        SERIAL_DEBUGLN(dtostrf(plainFactorB, 10, 15, serialBuffer));
-        SERIAL_DEBUGLN(dtostrf(plainFactorC, 10, 15, serialBuffer));
+        SERIAL_BED_DEBUGLNPGM("fittingBed");
+        SERIAL_BED_DEBUGLN(dtostrf(plainFactorA, 10, 15, serialBuffer));
+        SERIAL_BED_DEBUGLN(dtostrf(plainFactorB, 10, 15, serialBuffer));
+        SERIAL_BED_DEBUGLN(dtostrf(plainFactorC, 10, 15, serialBuffer));
         
         add_homeing[Z_AXIS] = 1.0/plainFactorC;
         add_homeing[Z_AXIS] -= -ADDING_Z_FOR_POSITIVE;
         add_homeing[Z_AXIS] -= touchPlateOffset;
-        SERIAL_DEBUGLNPGM("add_homeing[Z_AXIS]");
-        SERIAL_DEBUGLN(add_homeing[Z_AXIS]);
+        SERIAL_BED_DEBUGLNPGM("add_homeing[Z_AXIS]");
+        SERIAL_BED_DEBUGLN(add_homeing[Z_AXIS]);
         Config_StoreSettings();
         
         for(int8_t i=0; i < NUM_AXIS; i++) {
@@ -1983,21 +2384,19 @@ void process_commands()
         st_synchronize();
         
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         
-        destination[X_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Y_AXIS] = 2 * Z_MAX_LENGTH;
-        destination[Z_AXIS] = 2 * Z_MAX_LENGTH;
+      destination[X_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Y_AXIS] = 2 * max_length(Z_AXIS);
+      destination[Z_AXIS] = 2 * max_length(Z_AXIS);
         feedrate = 1.732 * homing_feedrate[X_AXIS];
         plan_buffer_line_old(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
         st_synchronize();
         endstops_hit_on_purpose();
         
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
@@ -2009,19 +2408,16 @@ void process_commands()
         // take care of back off and rehome now we are all at the top
         HOMEAXIS(X);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         HOMEAXIS(Y);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
         HOMEAXIS(Z);
         if (printing_state==PRINT_STATE_HOMING_ABORT) {
-          add_homeing[Z_AXIS] = add_homeing_z_back_up;
           level_abort();
           return;
         }
@@ -2030,127 +2426,20 @@ void process_commands()
         plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
         
         
-        SERIAL_DEBUGLNPGM("fittingBedUpdateKBefore:");
-        SERIAL_DEBUGLN(plainFactorAAC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorBBC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorCAC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorCBC*1000000.0);
+      SERIAL_BED_DEBUGLNPGM("fittingBedUpdateKBefore:");
+      SERIAL_BED_DEBUGLN(plainFactorAAC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorBBC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorCAC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorCBC*1000000000.0);
         
         fittingBedUpdateK();
         
-        SERIAL_DEBUGLNPGM("fittingBedUpdateKAfter:");
-        SERIAL_DEBUGLN(plainFactorAAC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorBBC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorCAC*1000000.0);
-        SERIAL_DEBUGLN(plainFactorCBC*1000000.0);
+      SERIAL_BED_DEBUGLNPGM("fittingBedUpdateKAfter:");
+      SERIAL_BED_DEBUGLN(plainFactorAAC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorBBC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorCAC*1000000000.0);
+      SERIAL_BED_DEBUGLN(plainFactorCBC*1000000000.0);
         
-        
-#else // NOT DELTA
-        
-        home_all_axis = !((code_seen(axis_codes[0])) || (code_seen(axis_codes[1])) || (code_seen(axis_codes[2])));
-        
-#if Z_HOME_DIR > 0                      // If homing away from BED do Z first
-#if defined(QUICK_HOME)
-        if(home_all_axis)
-        {
-          current_position[X_AXIS] = 0; current_position[Y_AXIS] = 0; current_position[Z_AXIS] = 0;
-          
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          
-          destination[X_AXIS] = 1.5 * X_MAX_LENGTH * X_HOME_DIR;
-          destination[Y_AXIS] = 1.5 * Y_MAX_LENGTH * Y_HOME_DIR;
-          destination[Z_AXIS] = 1.5 * Z_MAX_LENGTH * Z_HOME_DIR;
-          feedrate = homing_feedrate[X_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          axis_is_at_home(X_AXIS);
-          axis_is_at_home(Y_AXIS);
-          axis_is_at_home(Z_AXIS);
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = current_position[X_AXIS];
-          destination[Y_AXIS] = current_position[Y_AXIS];
-          destination[Z_AXIS] = current_position[Z_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          feedrate = 0.0;
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          current_position[X_AXIS] = destination[X_AXIS];
-          current_position[Y_AXIS] = destination[Y_AXIS];
-          current_position[Z_AXIS] = destination[Z_AXIS];
-        }
-#endif
-        if((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) {
-          HOMEAXIS(Z);
-        }
-#endif
-        
-#if defined(QUICK_HOME)
-        if((home_all_axis)||( code_seen(axis_codes[X_AXIS]) && code_seen(axis_codes[Y_AXIS])) )  //first diagonal move
-        {
-          current_position[X_AXIS] = 0;current_position[Y_AXIS] = 0;
-          
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = 1.5 * X_MAX_LENGTH * X_HOME_DIR;destination[Y_AXIS] = 1.5 * Y_MAX_LENGTH * Y_HOME_DIR;
-          feedrate = homing_feedrate[X_AXIS];
-          if(homing_feedrate[Y_AXIS]<feedrate)
-            feedrate =homing_feedrate[Y_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          st_synchronize();
-          
-          axis_is_at_home(X_AXIS);
-          axis_is_at_home(Y_AXIS);
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = current_position[X_AXIS];
-          destination[Y_AXIS] = current_position[Y_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          feedrate = 0.0;
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          current_position[X_AXIS] = destination[X_AXIS];
-          current_position[Y_AXIS] = destination[Y_AXIS];
-          current_position[Z_AXIS] = destination[Z_AXIS];
-        }
-#endif
-        
-        if((home_all_axis) || (code_seen(axis_codes[X_AXIS])))
-        {
-          HOMEAXIS(X);
-        }
-        
-        if((home_all_axis) || (code_seen(axis_codes[Y_AXIS]))) {
-          HOMEAXIS(Y);
-        }
-        
-#if Z_HOME_DIR < 0                      // If homing towards BED do Z last
-        if((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) {
-          HOMEAXIS(Z);
-        }
-#endif
-        
-        if(code_seen(axis_codes[X_AXIS]))
-        {
-          if(code_value_long() != 0) {
-            current_position[X_AXIS]=code_value()+add_homeing[0];
-          }
-        }
-        
-        if(code_seen(axis_codes[Y_AXIS])) {
-          if(code_value_long() != 0) {
-            current_position[Y_AXIS]=code_value()+add_homeing[1];
-          }
-        }
-        
-        if(code_seen(axis_codes[Z_AXIS])) {
-          if(code_value_long() != 0) {
-            current_position[Z_AXIS]=code_value()+add_homeing[2];
-          }
-        }
-        plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-#endif // DELTA
         
 #ifdef ENDSTOPS_ONLY_FOR_HOMING
         enable_endstops(false);
@@ -2287,8 +2576,9 @@ void process_commands()
         card.openFile(strchr_pointer + 4,true);
         break;
       case 24: //M24 - Start SD print
-        card.startFileprint();
-        starttime=millis();
+        //      card.startFileprint();
+        //      starttime=millis();
+        doPreparePrint();
         break;
       case 25: //M25 - Pause SD print
         card.pauseSDPrint();
@@ -2409,12 +2699,12 @@ void process_commands()
         SERIAL_PROTOCOL_F(degHotend(tmp_extruder),1);
         SERIAL_PROTOCOLPGM(" /");
         SERIAL_PROTOCOL_F(degTargetHotend(tmp_extruder),1);
-#if TEMP_SENSOR_BED != 0
+      if (Device_isBedHeat) {
         SERIAL_PROTOCOLPGM(" B:");
         SERIAL_PROTOCOL_F(degBed(),1);
         SERIAL_PROTOCOLPGM(" /");
         SERIAL_PROTOCOL_F(degTargetBed(),1);
-#endif //TEMP_BED_PIN
+      }
 #else
         SERIAL_ERROR_START;
         SERIAL_ERRORLNPGM(MSG_ERR_NO_THERMISTORS);
@@ -2449,7 +2739,9 @@ void process_commands()
           autotemp_enabled=true;
         }
 #endif
-        
+
+      eeprom_write_word((uint16_t*)EEPROM_SDUPS_HEATING_OFFSET, degTargetHotend(tmp_extruder));
+
         setWatch();
         codenum = millis();
         
@@ -2510,10 +2802,13 @@ void process_commands()
       }
         break;
       case 190: // M190 - Wait for bed heater to reach target.
-#if TEMP_SENSOR_BED != 0
+      if (Device_isBedHeat) {
         printing_state = PRINT_STATE_HEATING_BED;
         LCD_MESSAGEPGM(MSG_BED_HEATING);
         if (code_seen('S')) setTargetBed(code_value());
+
+        eeprom_write_word((uint16_t*)EEPROM_SDUPS_HEATING_BED_OFFSET, degTargetBed());
+
         codenum = millis();
         while(current_temperature_bed < target_temperature_bed - TEMP_WINDOW)
         {
@@ -2536,7 +2831,7 @@ void process_commands()
         }
         LCD_MESSAGEPGM(MSG_BED_DONE);
         previous_millis_cmd = millis();
-#endif
+      }
         break;
         
 #if defined(FAN_PIN) && FAN_PIN > -1
@@ -3368,15 +3663,107 @@ void process_commands()
         gcode_LastN = Stopped_gcode_LastN;
         FlushSerialRequestResend();
         break;
-        
-        
-        
-#ifdef OVERLORD_WIFI
+    case 780:
+      if (code_seen('S')) targetFanSpeed=code_value();
+      break;
+    case 781:
+      if (code_seen('S')) targetFeedmultiply=code_value();
+      break;
       case 760:
-        SERIAL_ECHOLN("M760");
+      isWindowsServerStarted = true;
+      SERIAL_ECHOLNPGM("M760");
         break;
-#endif
-        
+    case 761:
+      currentMenu = lcd_menu_bluetooth;
+      SERIAL_ECHOLNPGM("M761");
+      break;
+    case 762:
+      if (isWindowsPrinting) {
+        SERIAL_ECHOLNPGM("M762 P1");
+      }
+      else{
+        SERIAL_ECHOLNPGM("M762 P0");
+      }
+      break;
+    case 763:
+      if (isWindowsPrinting) {
+        SERIAL_ECHOLNPGM("M763 P0");
+      }
+      else{
+        card.release();
+        wifiSDChangeMaster(WIFI_SD_WINDOWS);
+        SERIAL_ECHOLNPGM("M763 P1");
+      }
+      break;
+    case 764:
+      wifiSDChangeMaster(WIFI_SD_OVERLORD);
+      delay(1000);
+      card.initsd();
+      if (card.isOk()) {
+        SERIAL_ECHOLNPGM("M764 P1");
+      }
+      else{
+        SERIAL_ECHOLNPGM("M764 P0");
+      }
+      break;
+    case 768:
+      if (!isWindowsPrinting) {
+        card.setroot();
+        card.openFile("WIFI", true);
+        if (card.isFileOpen())
+        {
+          char buffer[64];
+          for(uint8_t n=0; n<8; n++)
+          {
+            card.fgets(buffer, sizeof(buffer));
+            buffer[sizeof(buffer)-1] = '\0';
+            while (strlen(buffer) > 0 && buffer[strlen(buffer)-1] < ' ') buffer[strlen(buffer)-1] = '\0';
+            if (strncmp_P(buffer, PSTR(";TIME:"), 6) == 0)
+              LCD_DETAIL_CACHE_TIME() = atol(buffer + 6);
+            else if (strncmp_P(buffer, PSTR(";MATERIAL:"), 10) == 0)
+              LCD_DETAIL_CACHE_MATERIAL(0) = atol(buffer + 10);
+    #if EXTRUDERS > 1
+            else if (strncmp_P(buffer, PSTR(";MATERIAL2:"), 11) == 0)
+              LCD_DETAIL_CACHE_MATERIAL(1) = atol(buffer + 11);
+    #endif
+          }
+          card.setIndex(0);
+
+          doPreparePrint();
+          SERIAL_ECHOLNPGM("M768 P1");
+        }
+        else{
+          SERIAL_ECHOLNPGM("M768 P0");
+        }
+
+      }
+      break;
+    case 765:
+      if (isWindowsPrinting) {
+        if (card.isFileOpen()) {
+          int progress = card.getFilePos() * 100 / card.getFileSize();
+          SERIAL_ECHOPGM("M765 P");
+          SERIAL_ECHOLN(progress);
+        }
+        else{
+          SERIAL_ECHOLNPGM("M765 P100");
+        }
+      }
+      else{
+        SERIAL_ECHOLNPGM("M765 P101");
+      }
+      break;
+
+    case 767:
+      doPausePrint();
+      currentMenu =  lcd_menu_print_abort;
+      SERIAL_ECHOLNPGM("M767");
+      break;
+
+    case 769:
+      SERIAL_ECHOPGM("M769 ");
+      SERIAL_ECHOLNPGM(STRING_CONFIG_H_AUTHOR);
+      break;
       case 770:
         if (code_seen('S')) setTargetHotend(code_value(), tmp_extruder);
         break;
@@ -3430,9 +3817,9 @@ void process_commands()
                 if (!strncmp(eepromBuffer, strchr_pointer, 8)) {
                   eeprom_read_block(eepromBuffer, (uint8_t*)EEPROM_DEVICE_ID+16, 8);
                   if (!strncmp(eepromBuffer, strchr_pointer, 8)) {
-                    SERIAL_DEBUGLNPGM("Device ID Stored:");
-                    SERIAL_DEBUGLN(strchr_pointer);
-                    lcd_change_to_menu(lcd_menu_advanced_version);
+//                  SERIAL_DEBUGLNPGM("Device ID Stored:");
+//                  SERIAL_DEBUGLN(strchr_pointer);
+                  currentMenu = lcd_menu_advanced_version;
                   }
                 }
               }
@@ -3614,7 +4001,7 @@ void ClearToSend()
 {
   previous_millis_cmd = millis();
 #ifdef SDSUPPORT
-  if(commandFrom[bufindr])
+  if(commandFrom[bufindr]==FromSerial)
     return;
 #endif //SDSUPPORT
   SERIAL_PROTOCOLLNPGM(MSG_OK);
@@ -3623,6 +4010,8 @@ void ClearToSend()
 void get_coordinates()
 {
   bool seen[4]={false,false,false,false};
+  char buffer[64];
+
   for(int8_t i=0; i < NUM_AXIS; i++)
   {
     if(code_seen(axis_codes[i]))
@@ -3635,10 +4024,55 @@ void get_coordinates()
       destination[i] = current_position[i]; //Are these else lines really needed?
     }
   }
+
+  if (seen[Z_AXIS] && commandFrom[bufindr] >= 0) {
+    if (destination[Z_AXIS]>current_position[Z_AXIS]) {
+      if (destination[Z_AXIS] >= SDUPSGetCoordinateLastZ + 0.1) {
+        SDUPSStorePosition(commandFrom[bufindr]);
+        SDUPSGetCoordinateLastZ = destination[Z_AXIS];
+        SDUPSGetCoordinateZ = current_position[Z_AXIS];
+
+        if (targetFanSpeed) {
+          int nextFanSpeed=lround(int(fanSpeed)*100/float(fanSpeedPercent)) +64;
+          if (nextFanSpeed>=targetFanSpeed) {
+            nextFanSpeed=targetFanSpeed;
+            targetFanSpeed=0;
+          }
+
+          sprintf_P(buffer, PSTR("M106 S%i"), nextFanSpeed);
+          enquecommand(buffer);
+        }
+
+        if (targetFeedmultiply) {
+          int feedmultiplyBuf=feedmultiply+20;
+
+          if (targetFeedmultiply<=feedmultiplyBuf) {
+            feedmultiplyBuf=targetFeedmultiply;
+            targetFeedmultiply=0;
+          }
+
+          sprintf_P(buffer, PSTR("M220 S%i"), feedmultiplyBuf);
+          enquecommand(buffer);
+        }
+      }
+    }
+    else{
+      SDUPSOverlapPosition(commandFrom[bufindr]);
+      SDUPSGetCoordinateLastZ = SDUPSGetCoordinateZ;
+    }
+  }
+
   if(code_seen('F'))
   {
     next_feedrate = code_value();
-    if(next_feedrate > 0.0) feedrate = next_feedrate;
+    if(next_feedrate > 0.0) {
+      if (next_feedrate>4000) {
+        feedrate = (next_feedrate-4000)/2 + 4000;
+      }
+      else{
+        feedrate = next_feedrate;
+      }
+    }
   }
 #ifdef FWRETRACT
   if(autoretract_enabled)
@@ -3716,33 +4150,6 @@ void clamp_to_software_endstops(float target[3])
   }
 }
 
-#ifdef DELTA
-void calculate_delta(float cartesian[3])
-{
-  //use square instead the sq to speed up the speed
-  delta[X_AXIS] = sqrt(sq(DELTA_DIAGONAL_ROD)
-                       - sq(DELTA_TOWER1_X-cartesian[X_AXIS])
-                       - sq(DELTA_TOWER1_Y-cartesian[Y_AXIS])
-                       ) + cartesian[Z_AXIS];
-  delta[Y_AXIS] = sqrt(sq(DELTA_DIAGONAL_ROD)
-                       - sq(DELTA_TOWER2_X-cartesian[X_AXIS])
-                       - sq(DELTA_TOWER2_Y-cartesian[Y_AXIS])
-                       ) + cartesian[Z_AXIS];
-  delta[Z_AXIS] = sqrt(sq(DELTA_DIAGONAL_ROD)
-                       - sq(DELTA_TOWER3_X-cartesian[X_AXIS])
-                       - sq(DELTA_TOWER3_Y-cartesian[Y_AXIS])
-                       ) + cartesian[Z_AXIS];
-  /*
-   SERIAL_ECHOPGM("cartesian x="); SERIAL_ECHO(cartesian[X_AXIS]);
-   SERIAL_ECHOPGM(" y="); SERIAL_ECHO(cartesian[Y_AXIS]);
-   SERIAL_ECHOPGM(" z="); SERIAL_ECHOLN(cartesian[Z_AXIS]);
-   
-   SERIAL_ECHOPGM("delta x="); SERIAL_ECHO(delta[X_AXIS]);
-   SERIAL_ECHOPGM(" y="); SERIAL_ECHO(delta[Y_AXIS]);
-   SERIAL_ECHOPGM(" z="); SERIAL_ECHOLN(delta[Z_AXIS]);
-   */
-}
-
 void calculate_delta_reverse(float theDelta[3], float theResult[3])
 {
   float x,y,z;
@@ -3772,7 +4179,6 @@ void calculate_delta_reverse(float theDelta[3], float theResult[3])
   theResult[Y_AXIS]=c0+c1*theResult[Z_AXIS];
 }
 
-#endif
 
 
 

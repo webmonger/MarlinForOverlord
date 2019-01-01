@@ -455,7 +455,7 @@ void CardReader::checkautostart(bool force)
       return;
   }
   autostart_stilltocheck=false;
-  if(!cardOK)
+  if(!cardOK && sdInserted)
   {
     initsd();
     if(!cardOK) //fail
@@ -493,8 +493,7 @@ void CardReader::checkautostart(bool force)
     lastnr=-1;
   else
   {
-      isUltiGcode=false;
-      lastnr++;
+    lastnr++;
   }
   clearError();
 }
@@ -551,6 +550,44 @@ void CardReader::chdir(const char * relpath)
     }
     workDir=newfile;
   }
+}
+
+char* CardReader::getFullPath(){
+
+  char* buffer= (char*)malloc(sizeof(filename)*(workDirDepth+1)+1);
+
+  if (buffer == NULL) {
+    Stop(STOP_REASON_OUT_OF_MEMORY);
+    return buffer;
+  }
+
+  char* ptr = buffer;
+
+  for (int i=(int)workDirDepth-1; i>=0; i--) {
+    workDirParents[i].getFilename(ptr);
+    if (*ptr == '/') {
+      ptr++;
+    }
+    else{
+      ptr += strlen(ptr);
+      *ptr = '/';
+      ptr++;
+    }
+  }
+
+  workDir.getFilename(ptr);
+  if (*ptr == '/') {
+    ptr++;
+  }
+  else{
+    ptr += strlen(ptr);
+    *ptr = '/';
+    ptr++;
+  }
+
+  strcpy(ptr, filename);
+
+  return buffer;
 }
 
 void CardReader::updir()

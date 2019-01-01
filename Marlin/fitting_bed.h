@@ -30,7 +30,7 @@ extern bool fittingBed();
 extern void fittingBedResetBackUp();
 
 extern void fittingBedReset();
-extern bool fittingBedRaw();
+extern bool fittingBedRaw(uint8_t nodeNumber);
 
 extern void fittingBedArrayInit();
 

@@ -13,6 +13,7 @@
 #include "pins.h"
 #include "UltiLCD2_menu_maintenance.h"
 #include "fitting_bed.h"
+#include "stepper.h"
 
 static void lcd_menu_maintenance_retraction();
 static void lcd_retraction_details(uint8_t nr);
@@ -51,18 +52,20 @@ static void lcd_menu_maintenance_select_manual_level();
 static void lcd_menu_maintenance_heat_for_level();
 static void lcd_menu_maintenance_heat_for_manual_level();
 static void lcd_menu_maintenance_manual_level();
+void lcd_menu_device();
 
-#define CIRCLE_RADIUS 75.0
-#define CIRCLE_RADIUS_STRING "75"
+#define CIRCLE_RADIUS 60.0
+#define CIRCLE_RADIUS_STRING "60"
 
 
 static float circleDegree=0;
 static float circleRadius=CIRCLE_RADIUS;
 static float maintenanceLevelZ=ADDING_Z_FOR_POSITIVE;
+static uint8_t linePosition = 0;
 
 #define MANUAL_LEVEL_NONE 0
 #define MANUAL_LEVEL_ENABLE 1
-#define MANUAL_LEVLE_UPDATE 2
+#define MANUAL_LEVLE_STOP 2
 uint8_t manualLevelState=MANUAL_LEVEL_NONE;
 
 /****************************************************************************************
@@ -71,10 +74,18 @@ uint8_t manualLevelState=MANUAL_LEVEL_NONE;
  ****************************************************************************************/
 static char* lcd_menu_maintenance_item(uint8_t nr)
 {
-    if (nr == 0)
-        strcpy_P(card.longFilename, PSTR("\x82""Reload"));
-    else if (nr == 1)
-        strcpy_P(card.longFilename, PSTR("\x83""Calibrate"));
+  if (nr == 0)
+    strcpy_P(card.longFilename, LS(PSTR(ENGLISH_UP "Reload"),
+                                   PSTR(CHINESE_POINT "\xA2" "\x81"  "\xF6" "\x80"  ),
+                                   PSTR(CHINESE_POINT "\x96" "\x83"  "\x97" "\x83"  " ""\xA3" "\x84"  "\xA9" "\x84"  "\x83" "\x83"  )) );
+  else if (nr == 1)
+    strcpy_P(card.longFilename, LS(PSTR(ENGLISH_POINT "Calibrate"),
+                                   PSTR(CHINESE_POINT "\xFB" "\x80"  "\xFC" "\x80"  "\xFE" "\x80"  "\xFF" "\x80"  ),
+                                   PSTR(CHINESE_POINT "\xA1" "\x83"  "\xA2" "\x83"  "\xC3" "\x82"  " ""\xA4" "\x83"  "\x85" "\x83"  )) );
+  else if (nr == 2)
+    strcpy_P(card.longFilename, LS(PSTR(ENGLISH_DOWN "Clean"),
+                                   PSTR(CHINESE_POINT "\x97" "\x82"  "\x98" "\x82"  "\xA0" "\x80"  "\xEC" "\x80"  ),
+                                   PSTR(CHINESE_POINT "\xD5" "\x82"  "\xD6" "\x82"  " ""\x90" "\x84"  "\xC6" "\x82"  )) );
     else
         strcpy_P(card.longFilename, PSTR("???"));
     return card.longFilename;
@@ -88,21 +99,34 @@ static void lcd_menu_maintenance_details(uint8_t nr)
 #ifdef FilamentDetection
       if (isFilamentDetectionEnable) {
         if (FilamentAvailable()) {
-          lcd_draw_detailP(PSTR("Material Yes."));
+          lcd_draw_detailP(LS(PSTR("Material Yes."),
+                            PSTR("\xC8" "\x80"  "\xF6" "\x80"  ),
+                            PSTR("\x96" "\x83"  "\x97" "\x83"  "Yes")) );
         }
         else{
-          lcd_draw_detailP(PSTR("Material No."));
+          lcd_draw_detailP(LS(PSTR("Material No."),
+                            PSTR("\x85" "\x82"  "\xF6" "\x80"  ),
+                            PSTR("\x96" "\x83"  "\x97" "\x83"  "No")) );
         }
       }
       else{
-        lcd_draw_detailP(PSTR("Change the Material."));
+        lcd_draw_detailP(LS(PSTR("Change the Material."),
+                          PSTR("\xA3" "\x81"  "\xA2" "\x81"  "\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  ),
+                          PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\xA3" "\x84"  "\xA9" "\x84"  "\x83" "\x83"  )) );
       }
 #else
-    lcd_draw_detailP(PSTR("Change the Material."));
-#endif
+    lcd_draw_detailP(LS(PSTR("Change the Material."),
+                        PSTR("\xA3" "\x81"  "\xA2" "\x81"  "\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  ),
+                        PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\xA3" "\x84"  "\xA9" "\x84"  "\x83" "\x83"  )) );#endif
     }
     else if (nr == 1)
-        lcd_draw_detailP(PSTR("Level the Platform."));
+        lcd_draw_detailP(LS(PSTR("Level the Platform."),
+                        PSTR("\xA4" "\x81"  "\xFB" "\x80"  "\xAA" "\x80"  "\xAB" "\x80"  "\xFB" "\x80"  "\xFC" "\x80"  ),
+                        PSTR("\xB7" "\x83"  "\xB8" "\x83"  " ""\xB9" "\x83"  "\x85" "\x83"  )) );
+  else if (nr == 2)
+    lcd_draw_detailP(LS(PSTR("Clean the Nozzle."),
+                        PSTR("\x97" "\x82"  "\x98" "\x82"  "\xA0" "\x80"  "\xEC" "\x80"  ),
+                        PSTR("\x90" "\x84"  "\xC6" "\x82"  " ""\xD5" "\x82"  "\xD6" "\x82"  )) );
     else
         lcd_draw_detailP(PSTR("???"));
 
@@ -113,23 +137,32 @@ void lcd_menu_maintenance()
     
     LED_NORMAL();
     
-    lcd_normal_menu(PSTR("Maintenance Menu"), 2, lcd_menu_maintenance_item, lcd_menu_maintenance_details);
+    lcd_normal_menu(LS(PSTR("Maintenance Menu"),
+                     PSTR("\xC4" "\x80"  "\xA3" "\x80"  ),
+                     PSTR("\xBA" "\x83"  "\xAC" "\x83"  "\xD7" "\x82"  "\xB7" "\x83"  )) , 3, lcd_menu_maintenance_item, lcd_menu_maintenance_details);
     lcd_lib_draw_gfx(0, 0, maintenanceGfx);
 
     if (IS_SELECTED_SCROLL(-1)) {
         lcd_change_to_menu(lcd_menu_main, SCROLL_MENU_ITEM_POS(0), MenuUp);
     }
-    if (IS_SELECTED_SCROLL(2)) {
+    if (IS_SELECTED_SCROLL(3)) {
         lcd_change_to_menu(lcd_menu_maintenance_advanced, SCROLL_MENU_ITEM_POS(0), MenuDown);
     }
     if (lcd_lib_button_pressed)
     {
-        if (IS_SELECTED_SCROLL(0))
-            lcd_change_to_menu(lcd_menu_change_material_preheat, SCROLL_MENU_ITEM_POS(0), MenuForward);
+        if (IS_SELECTED_SCROLL(0)){
+      setTargetHotend(material[active_extruder].temperature, active_extruder);
+      isReload=true;
+      lcd_change_to_menu(lcd_menu_change_material_preheat, SCROLL_MENU_ITEM_POS(0), MenuForward);
+    }
         else if (IS_SELECTED_SCROLL(1))
             lcd_change_to_menu(lcd_menu_maintenance_select_level, SCROLL_MENU_ITEM_POS(0), MenuForward);
     }
-    
+    else if (IS_SELECTED_SCROLL(2)) {
+      isReload=false;
+      lcd_change_to_menu(lcd_material_clean_nozzle_option, SCROLL_MENU_ITEM_POS(0), MenuForward);
+    }
+  }
 }
 
     /****************************************************************************************
@@ -140,11 +173,21 @@ void lcd_menu_maintenance()
 
 static void lcd_menu_maintenance_select_level()
 {
-    lcd_question_screen(lcd_menu_maintenance_heat_for_level, NULL, PSTR("YES"), lcd_menu_maintenance_select_manual_level, NULL, PSTR("NO"), MenuForward, MenuForward);
-    
-    lcd_lib_draw_string_centerP(10, PSTR("Would you like to"));
-    lcd_lib_draw_string_centerP(20, PSTR("Automatically level"));
-    lcd_lib_draw_string_centerP(30, PSTR("the buildplate?"));
+    lcd_question_screen(lcd_menu_maintenance_heat_for_level, NULL, LS(PSTR("YES"),
+                                                                    PSTR("\x8C" "\x82"  "\xDB" "\x80"  ),
+                                                                    PSTR("\x91" "\x84"  "\xB6" "\x83"  )) , lcd_menu_maintenance_select_manual_level, NULL, LS(PSTR("NO"),
+                                                                                                                                   PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
+                                                                                                                                   PSTR("\xFF" "\x82"  "\xC6" "\x82"  )) , MenuForward, MenuForward);
+  
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Would you like to"),
+                                                  PSTR("\xA5" "\x81"  "\xA6" "\x81"  "\x84" "\x80"  "\x85" "\x80"  "\xA7" "\x81"  "\xB1" "\x80"  ),
+                                                  PSTR("\xBB" "\x83"  "\xBC" "\x83"  " ""\xB7" "\x83"  "\xB8" "\x83"  " ""\xB9" "\x83"  "\x85" "\x83"  " ""\xDE" "\x82"  "\xB4" "\x83"  "\xF2" "\x82"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("Automatically level"),
+                                                  PSTR("\xA4" "\x81"  "\xFB" "\x80"  "\xA8" "\x81"  "\xA9" "\x81"  "\xAA" "\x81"  "?"),
+                                                  PSTR("\xBD" "\x83"  "\xBE" "\x83"  " ""\x9E" "\x83"  "\xBF" "\x83"  "\xF3" "\x82"  "\xC0" "\x83"  "\xC1" "\x83"  "\x9C" "\x83"  "\xC2" "\x83"  "?")) );
+  lcd_lib_draw_string_centerP(LS(30, 64, 64) , LS(PSTR("the buildplate?"),
+                                                  PSTR(""),
+                                                  PSTR("")) );
 }
 
     /****************************************************************************************
@@ -154,7 +197,6 @@ static void lcd_menu_maintenance_select_level()
 
 static void doManualLevelHeat()
 {
-    target_temperature_bed = 0;
     fanSpeedPercent = 0;
     for(uint8_t e=0; e<EXTRUDERS; e++)
     {
@@ -177,11 +219,21 @@ static void doCancelManualLevel()
 
 static void lcd_menu_maintenance_select_manual_level()
 {
-    lcd_question_screen(lcd_menu_maintenance_heat_for_manual_level, doManualLevelHeat, PSTR("YES"), lcd_menu_maintenance, doCancelManualLevel, PSTR("NO"));
-    
-    lcd_lib_draw_string_centerP(10, PSTR("Would you like to"));
-    lcd_lib_draw_string_centerP(20, PSTR("Manually level"));
-    lcd_lib_draw_string_centerP(30, PSTR("the buildplate?"));
+  lcd_question_screen(lcd_menu_maintenance_heat_for_manual_level, doManualLevelHeat, LS(PSTR("YES"),
+                                                                                        PSTR("\x8C" "\x82"  "\xDB" "\x80"  ),
+                                                                                        PSTR("\x91" "\x84"  "\xB6" "\x83"  )) ,
+                      lcd_menu_maintenance, doCancelManualLevel, LS(PSTR("NO"),
+                                                                    PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
+                                                                    PSTR("\xFF" "\x82"  "\xC6" "\x82"  )));
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Would you like to"),
+                                                  PSTR(""),
+                                                  PSTR("\xB7" "\x83"  "\xBC" "\x83"  "\xB3" "\x83"  "\xB4" "\x83"  " ""\xB7" "\x83"  "\xB8" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("Manually level"),
+                                                  PSTR("\xA5" "\x81"  "\xA6" "\x81"  "\xAB" "\x81"  "\xB1" "\x80"  "\xA4" "\x81"  "\xFB" "\x80"  "\xAA" "\x81"  "?"),
+                                                  PSTR("\xB9" "\x83"  "\x85" "\x83"  "\xF3" "\x82"  "\xC0" "\x83"  "\xC1" "\x83"  "\x9C" "\x83"  "\xC2" "\x83"  "?")) );
+  lcd_lib_draw_string_centerP(LS(30, 64, 64) , LS(PSTR("the buildplate?"),
+                                                  PSTR(""),
+                                                  PSTR("")) );
 }
 
         /****************************************************************************************
@@ -214,12 +266,19 @@ static void lcd_menu_maintenance_heat_for_level()
         progress = minProgress;
     else
         minProgress = progress;
-    
-    lcd_info_screen(NULL, doMaintenanceCancelAutoLevel, PSTR("CANCEL"), MenuForward);
-    lcd_lib_draw_string_centerP(10, PSTR("Printhead heating in"));
-    lcd_lib_draw_string_centerP(20, PSTR("case that material"));
-    lcd_lib_draw_string_centerP(30, PSTR("is left around it."));
-    
+
+  lcd_info_screen(NULL, doMaintenanceCancelAutoLevel, LS(PSTR("CANCEL"),
+                                                         PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
+                                                         PSTR("\xFF" "\x82"  "\xC6" "\x82"  )) , MenuForward);
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Printhead heating in"),
+                                                  PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\xAE" "\x80"  "\x90" "\x80"  "\x8B" "\x80"  ),
+                                                  PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\x90" "\x83"  "\x91" "\x83"  "\xC0" "\x82"  " ""\x94" "\x83"  "\x95" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("case that material"),
+                                                  PSTR("\xEE" "\x80"  "\xEF" "\x80"  "\xF2" "\x80"  "\xF3" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  ),
+                                                  PSTR("\x96" "\x83"  "\x97" "\x83"  "\x98" "\x83"  " ""\xE3" "\x82"  "\x99" "\x83"  "\x9A" "\x83"  "\x9B" "\x83"  "\x9C" "\x83"  "\x9D" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(30, 64, 64) , LS(PSTR("is left around it."),
+                                                  PSTR(""),
+                                                  PSTR("")) );
     lcd_progressbar(progress);
 }
 
@@ -238,26 +297,38 @@ static void lcd_menu_maintenance_waiting_auto_level()
 {
     LED_NORMAL();
     if (printing_state!=PRINT_STATE_NORMAL || is_command_queued() || isCommandInBuffer()) {
-        lcd_info_screen(NULL, doMaintenanceCancelAutoLevelProcession, PSTR("ABORT"), MenuForward);
+        lcd_info_screen(NULL, doMaintenanceCancelAutoLevelProcession, LS(PSTR("ABORT"),
+                                                                     PSTR("\xAC" "\x80"  "\xAD" "\x80"  ),
+                                                                     PSTR("\xE5" "\x83"  "\xD7" "\x82"  "\xDB" "\x82"  )) , MenuForward);
     }
     else{
         lcd_change_to_menu(lcd_menu_maintenance,1,MenuBackward);
     }
     
-    lcd_lib_draw_string_centerP(10, PSTR("The Nozzle will"));
-    lcd_lib_draw_string_centerP(20, PSTR("touch the buildplate"));
-    lcd_lib_draw_string_centerP(30, PSTR("gently to do the"));
-    lcd_lib_draw_string_centerP(40, PSTR("calibration process."));
+  lcd_lib_draw_string_centerP(LS(10, 11, 11), LS(PSTR("The Nozzle will"),
+                                                 PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\x81" "\x81"  "\xE3" "\x80"  "\xF8" "\x80"  ),
+                                                 PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\x9D" "\x83"  "\x9E" "\x83"  "\x9F" "\x83"  "\xA0" "\x83"  "\xC8" "\x82"  )));
+  lcd_lib_draw_string_centerP(LS(20, 24, 24), LS(PSTR("touch the buildplate"),
+                                                 PSTR("\xED" "\x80"  "\xF9" "\x80"  "\xFA" "\x80"  "\xAA" "\x80"  "\xAB" "\x80"  "\xFB" "\x80"  "\xFC" "\x80"  ),
+                                                 PSTR("\xA1" "\x83"  "\xA2" "\x83"  "\xC3" "\x82"  " ""\xCA" "\x82"  "\xD2" "\x82"  "\xA3" "\x83"  )));
+  lcd_lib_draw_string_centerP(LS(30, 37, 37), LS(PSTR("gently to do the"),
+                                                 PSTR("\x99" "\x82"  "\xAD" "\x81"  "\xC8" "\x80"  "\"""\xAE" "\x81"  "\xAE" "\x81"  "\"""\xAF" "\x81"  ),
+                                                 PSTR("\xA1" "\x83"  "\xA2" "\x83"  "\xC3" "\x82"  " ""\xA4" "\x83"  "\x85" "\x83"  )));
+  lcd_lib_draw_string_centerP(LS(40, 64, 64), LS(PSTR("calibration process."),
+                                                 PSTR(""),
+                                                 PSTR("")));
 }
 
 
         /****************************************************************************************
          * Manual Level :heat_for_manual_level
          ****************************************************************************************/
-static void doMaintenanceLevel()
+static void doManualLevel()
 {
     char buffer[64];
     char *bufferPtr;
+
+  volume_to_filament_length[active_extruder] = 1.0 / (M_PI * (material[active_extruder].diameter / 2.0) * (material[active_extruder].diameter / 2.0));
 
     circleDegree=0;
     circleRadius=CIRCLE_RADIUS;
@@ -274,7 +345,7 @@ static void doMaintenanceLevel()
         fittingBedArray[index][Z_AXIS]+=fittingBedOffset[index];
     }
   
-    fittingBedRaw();
+    fittingBedRaw(NodeNum);
   
     add_homeing[Z_AXIS] = 1.0/plainFactorC;
     add_homeing[Z_AXIS] -= -ADDING_Z_FOR_POSITIVE;
@@ -314,8 +385,8 @@ static void doMaintenanceLevel()
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
-                strcpy_P(bufferPtr, PSTR(" E0\n"));
-                bufferPtr+=strlen_P(PSTR(" E0\n"));
+                strcpy_P(bufferPtr, PSTR("X10 E0\n"));
+                bufferPtr+=strlen_P(PSTR("X10 E0\n"));
             }
             setPrimed();
         }
@@ -330,8 +401,8 @@ static void doMaintenanceLevel()
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
-                strcpy_P(bufferPtr, PSTR(" E0\n"));
-                bufferPtr+=strlen_P(PSTR(" E0\n"));
+                strcpy_P(bufferPtr, PSTR("X10 E0\n"));
+                bufferPtr+=strlen_P(PSTR("X10 E0\n"));
             }
         }
         enquecommand(buffer);
@@ -352,7 +423,19 @@ static void lcd_menu_maintenance_heat_for_manual_level()
     
     static unsigned long heatupTimer=millis();
     
-    lcd_info_screen(lcd_menu_maintenance, doCancelHeatManualLevel, PSTR("ABORT"), MenuForward);
+    lcd_info_screen(lcd_menu_maintenance, doCancelHeatManualLevel, LS(PSTR("ABORT"),
+                                                                    PSTR("\xC1" "\x80"  "\x83" "\x80"  ),
+                                                                    PSTR("\xE5" "\x83"  "\xD7" "\x82"  "\xDB" "\x82"  )) , MenuForward);
+  
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Heating up..."),
+                                                  PSTR("\xAE" "\x80"  "\xAF" "\x80"  "\x90" "\x80"  "\x8B" "\x80"  "..."),
+                                                  PSTR("\x90" "\x83"  "\x91" "\x83"  "\xC0" "\x82"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("Preparing for"),
+                                                  PSTR("\xFF" "\x80"  "\xEB" "\x80"  "\xA4" "\x81"  "\xFB" "\x80"  ),
+                                                  PSTR("\xB7" "\x83"  "\xB8" "\x83"  " ""\xB9" "\x83"  "\x85" "\x83"  " ""\xC3" "\x83"  "\x8F" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(30, 64, 64) , LS(PSTR("Calibration"),
+                                                  PSTR(""),
+                                                  PSTR("")) );
 
     for(uint8_t e=0; e<EXTRUDERS; e++)
       {
@@ -363,7 +446,7 @@ static void lcd_menu_maintenance_heat_for_manual_level()
     
     if (millis()-heatupTimer>=TEMP_RESIDENCY_TIME*1000UL && printing_state == PRINT_STATE_NORMAL)
       {
-        doMaintenanceLevel();
+        doManualLevel();
         lcd_change_to_menu(lcd_menu_maintenance_manual_level);
       }
     
@@ -380,11 +463,6 @@ static void lcd_menu_maintenance_heat_for_manual_level()
         progress = minProgress;
     else
         minProgress = progress;
-    
-    lcd_lib_draw_string_centerP(10, PSTR("Heating up..."));
-    lcd_lib_draw_string_centerP(20, PSTR("Preparing for"));
-    lcd_lib_draw_string_centerP(30, PSTR("Calibration"));
-  
     lcd_progressbar(progress);
 }
 
@@ -411,7 +489,7 @@ static void doFinishManualLevel()
 
 void manualLevelRoutine()
 {
-    if (manualLevelState) {
+    if (manualLevelState == MANUAL_LEVEL_ENABLE) {
         
         if (commands_queued() || is_command_queued()) {
             return;
@@ -436,7 +514,8 @@ void manualLevelRoutine()
                 circleDegree-=2*PI;
                 circleRadius-=0.4;
                 plan_set_e_position(0);
-                if (circleRadius<0) {
+                if (circleRadius<2) {
+                manualLevelState = MANUAL_LEVLE_STOP;
                     return;
                 }
             }
@@ -486,8 +565,6 @@ static void lcd_menu_maintenance_manual_level()
                 fittingBedArray[3][Z_AXIS] -= 0;
                 fittingBedArray[4][Z_AXIS] -= 0.0125;
                 fittingBedArray[5][Z_AXIS] -= 0.0375;
-//                fittingBedArray[6][Z_AXIS] -= 0.05;
-//                fittingBedArray[7][Z_AXIS] -= 0.085355339;
             }
             else{
                 fittingBedArray[0][Z_AXIS] += 0.05;
@@ -496,8 +573,6 @@ static void lcd_menu_maintenance_manual_level()
                 fittingBedArray[3][Z_AXIS] += 0;
                 fittingBedArray[4][Z_AXIS] += 0.0125;
                 fittingBedArray[5][Z_AXIS] += 0.0375;
-//                fittingBedArray[6][Z_AXIS] += 0.05;
-//                fittingBedArray[7][Z_AXIS] += 0.085355339;
             }
             
             if (fittingBedArray[0][Z_AXIS]<0.5) {
@@ -511,7 +586,7 @@ static void lcd_menu_maintenance_manual_level()
             SERIAL_DEBUGLN(plainFactorB*1000000.0);
             SERIAL_DEBUGLN(plainFactorC*1000000.0);
             
-            fittingBedRaw();
+            fittingBedRaw(NodeNum);
             fittingBedUpdateK();
             
             SERIAL_DEBUGLNPGM("plainFactor new:");
@@ -530,13 +605,28 @@ static void lcd_menu_maintenance_manual_level()
             lcd_lib_encoder_pos=0;
         }
     }
-    
-    
-    lcd_info_screen(lcd_menu_maintenance, doFinishManualLevel, PSTR("DONE"), MenuBackward);
-    lcd_lib_draw_string_centerP(10, PSTR("Press Down or UP"));
-    lcd_lib_draw_string_centerP(20, PSTR("to move the hotend"));
-    lcd_lib_draw_string_centerP(30, PSTR("until the print"));
-    lcd_lib_draw_string_centerP(40, PSTR("works well."));
+  
+  
+  if (manualLevelState == MANUAL_LEVLE_STOP) {
+    doFinishManualLevel();
+    lcd_change_to_menu(lcd_menu_maintenance);
+  }
+  
+    lcd_info_screen(lcd_menu_maintenance, doFinishManualLevel, LS(PSTR("DONE"),
+                                                                PSTR("\xDA" "\x81"  "\xBB" "\x80"  ),
+                                                                PSTR("\xDD" "\x83"  "\xCE" "\x82"  "\xC7" "\x83"  )) , MenuBackward);
+  lcd_lib_draw_string_centerP(LS(10, 11, 11), LS(PSTR("Press Down or UP"),
+                                                 PSTR("\xE2" "\x80"  "\xD2" "\x80"  "\xE3" "\x80"  "\xE4" "\x80"  ",""\xA4" "\x81"  "\xB1" "\x81"  "\xA0" "\x80"  "\xEC" "\x80"  "\x89" "\x81"  ),
+                                                 PSTR("Down or UP""\x86" "\x83"  "\x87" "\x83"  "\xB3" "\x83"  "\xB4" "\x83"  )));
+  lcd_lib_draw_string_centerP(LS(20, 24, 24), LS(PSTR("to move the hotend"),
+                                                 PSTR("\xFB" "\x80"  "\xFC" "\x80"  "\xB3" "\x81"  "\xB4" "\x81"  ",""\x91" "\x82"  "\xB5" "\x81"  "\x89" "\x81"  ),
+                                                 PSTR("\xC9" "\x83"  "\xCA" "\x83"  "\xCB" "\x83"  " ""\xCC" "\x83"  "\xCD" "\x83"  "\xBE" "\x82"  )));
+  lcd_lib_draw_string_centerP(LS(30, 37, 37), LS(PSTR("until the print"),
+                                                 PSTR("\xB6" "\x81"  "\xA6" "\x81"  "\xF4" "\x80"  "\xAA" "\x80"  "\xAB" "\x80"  "\xB7" "\x81"  "\xB8" "\x81"  ),
+                                                 PSTR("\xC5" "\x82"  "\xCE" "\x83"  "\xCF" "\x83"  "\xB7" "\x83"  "\xD0" "\x83"  "\xC1" "\x83"  "\x9C" "\x83"  "\x9D" "\x83"  )));
+  lcd_lib_draw_string_centerP(LS(40, 64, 64), LS(PSTR("works well."),
+                                                 PSTR(""),
+                                                 PSTR("")));
 }
 
 /****************************************************************************************
@@ -547,13 +637,21 @@ static void lcd_menu_maintenance_manual_level()
 static char* lcd_advanced_item(uint8_t nr)
 {
     if (nr == 0)
-        strcpy_P(card.longFilename, PSTR("\x82""Temperature"));
+        strcpy_P(card.longFilename, LS(PSTR(ENGLISH_UP "Temperature"),
+                                     PSTR(CHINESE_POINT "\x88" "\x80"  "\x89" "\x80"  ),
+                                     PSTR(CHINESE_POINT "\xC4" "\x82"  "\xC5" "\x82"  )));
     else if (nr == 1)
-        strcpy_P(card.longFilename, PSTR("\x80""Movement"));
+      strcpy_P(card.longFilename, LS(PSTR(ENGLISH_POINT "Movement"),
+                                     PSTR(CHINESE_POINT "\xB9" "\x81"  "\xBA" "\x81"  ),
+                                     PSTR(CHINESE_POINT "\x9F" "\x84"  "\xA0" "\x84"  "\xA1" "\x84"  "\xDB" "\x82"  )));
     else if (nr == 2)
-        strcpy_P(card.longFilename, PSTR("\x80""Settings"));
+      strcpy_P(card.longFilename, LS(PSTR(ENGLISH_POINT "Settings"),
+                                     PSTR(CHINESE_POINT "\xE0" "\x80"  "\xE1" "\x80"  ),
+                                     PSTR(CHINESE_POINT "\x84" "\x83"  "\x85" "\x83"  )));
     else if (nr == 3)
-        strcpy_P(card.longFilename, PSTR("\x80""About"));
+      strcpy_P(card.longFilename, LS(PSTR(ENGLISH_POINT "About"),
+                                     PSTR(CHINESE_POINT "\x9B" "\x80"  "\xBB" "\x81"  "\xBC" "\x81"  "\xD3" "\x80"  ),
+                                     PSTR(CHINESE_POINT "\xE5" "\x83"  "\xA3" "\x84"  "\xA4" "\x84"  )));
     else
         strcpy_P(card.longFilename, PSTR("???"));
     return card.longFilename;
@@ -563,13 +661,21 @@ static void lcd_advanced_details(uint8_t nr)
 {
     char buffer[22];
     if (nr == 0)
-        lcd_draw_detailP(PSTR("Change the Temperature."));
-    else if (nr == 1)
-        lcd_draw_detailP(PSTR("Movement."));
-    else if (nr == 2)
-        lcd_draw_detailP(PSTR("Settings."));
-    else if (nr == 3)
-        lcd_draw_detailP(PSTR("About."));
+        lcd_draw_detailP(LS(PSTR("Change the Temperature."),
+                        PSTR("\xA4" "\x81"  "\xB1" "\x81"  "\x88" "\x80"  "\x89" "\x80"  ),
+                        PSTR("\xC4" "\x82"  "\xC5" "\x82"  " ""\xB9" "\x83"  "\xD1" "\x83"  )) );
+  else if (nr == 1)
+    lcd_draw_detailP(LS(PSTR("Movement."),
+                        PSTR("\xB9" "\x81"  "\xBA" "\x81"  ),
+                        PSTR("\x9F" "\x84"  "\xA0" "\x84"  "\xA1" "\x84"  "\xDB" "\x82"  )));
+  else if (nr == 2)
+    lcd_draw_detailP(LS(PSTR("Settings."),
+                        PSTR("\xE0" "\x80"  "\xE1" "\x80"  ),
+                        PSTR("\x84" "\x83"  "\x85" "\x83"  )));
+  else if (nr == 3)
+    lcd_draw_detailP(LS(PSTR("About."),
+                        PSTR("\x9B" "\x80"  "\xBB" "\x81"  "\xBC" "\x81"  "\xD3" "\x80"  ),
+                        PSTR("\xE5" "\x83"  "\xA3" "\x84"  "\xA4" "\x84"  )));
     else
         lcd_draw_detailP(PSTR("???"));
 }
@@ -581,7 +687,10 @@ static void lcd_menu_maintenance_advanced()
     if (lcd_lib_encoder_pos >= 3 * ENCODER_TICKS_PER_SCROLL_MENU_ITEM)
         lcd_lib_encoder_pos = 3 * ENCODER_TICKS_PER_SCROLL_MENU_ITEM;
     
-    lcd_normal_menu(PSTR("Maintenance Menu"), 4, lcd_advanced_item, lcd_advanced_details);
+    lcd_normal_menu(LS(PSTR("Maintenance Menu"),
+                     PSTR("\xC4" "\x80"  "\xA3" "\x80"  "\xD0" "\x80"  "\xD1" "\x80"  ),
+                     PSTR("\xBA" "\x83"  "\xAC" "\x83"  "\xD7" "\x82"  "\xB7" "\x83"  " ""\xFB" "\x82"  "\xF1" "\x82"  )) , 4, lcd_advanced_item, lcd_advanced_details);
+
     lcd_lib_draw_gfx(0, 0, advancedGfx);
     
     
@@ -614,101 +723,76 @@ static void lcd_menu_maintenance_advanced()
      ****************************************************************************************/
 static char* lcd_advanced_temperature_item(uint8_t nr)
 {
-#if TEMP_SENSOR_BED != 0
   if (nr == 0)
-      strcpy_P(card.longFilename, PSTR("Return"));
+    strcpy_P(card.longFilename, LS(PSTR("Return"),
+                                   PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                   PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
-      strcpy_P(card.longFilename, PSTR("Heatup nozzle"));
-  else if (nr == 2)
-      strcpy_P(card.longFilename, PSTR("Heatup buildplate"));
-  else if (nr == 3)
-      strcpy_P(card.longFilename, PSTR("Fan speed"));
+    strcpy_P(card.longFilename, LS(PSTR("Heatup nozzle"),
+                                   PSTR("\x90" "\x80"  "\x8B" "\x80"  "\xA0" "\x80"  "\xEC" "\x80"  ),
+                                   PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\x90" "\x83"  "\x91" "\x83"  )) );
+  else if (nr == 2 && Device_isBedHeat)
+    strcpy_P(card.longFilename, LS(PSTR("Heatup buildplate"),
+                                   PSTR("\x90" "\x80"  "\x8B" "\x80"  "\xAA" "\x80"  "\xAB" "\x80"  "\xFB" "\x80"  "\xFC" "\x80"  ),
+                                   PSTR("\xA1" "\x83"  "\xA2" "\x83"  "\xC3" "\x82"  " ""\x90" "\x83"  "\x91" "\x83"  )) );
+  else if (nr == (3 - !Device_isBedHeat))
+    strcpy_P(card.longFilename, LS(PSTR("Fan speed"),
+                                   PSTR("\xC0" "\x81"  "\xC1" "\x81"  "\xC2" "\x81"  "\xC3" "\x81"  ),
+                                   PSTR("\xD2" "\x83"  " ""\xD3" "\x83"  "\xC5" "\x82"  )) );
   else
       strcpy_P(card.longFilename, PSTR("???"));
   return card.longFilename;
-#else
-  if (nr == 0)
-    strcpy_P(card.longFilename, PSTR("Return"));
-  else if (nr == 1)
-    strcpy_P(card.longFilename, PSTR("Heatup nozzle"));
-  else if (nr == 2)
-    strcpy_P(card.longFilename, PSTR("Fan speed"));
-  else
-    strcpy_P(card.longFilename, PSTR("???"));
-  return card.longFilename;
-#endif
 }
 
 static void lcd_advanced_temperature_details(uint8_t nr)
 {
-#if TEMP_SENSOR_BED != 0
+
   char buffer[22];
   
   char* c = (char*)buffer;
   
   if (nr == 0)
-      lcd_draw_detailP(PSTR("Return to Advanced."));
+    lcd_draw_detailP(LS(PSTR("Return to Advanced."),
+                        PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                        PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
     {
-      c = int_to_string(current_temperature[0], c, PSTR("\x81""C"));
+      c = int_to_string(current_temperature[0], c, PSTR("`C"));
       *c++ = '/';
-      c = int_to_string(target_temperature[0], c, PSTR("\x81""C"));
+      c = int_to_string(target_temperature[0], c, PSTR("`C"));
       
       lcd_draw_detail((char*)buffer);
     }
-  else if (nr == 2)
+  else if (nr == 2 && Device_isBedHeat)
     {
-      c = int_to_string(current_temperature_bed, c, PSTR("\x81""C"));
+      c = int_to_string(current_temperature_bed, c, PSTR("`C"));
       *c++ = '/';
-      c = int_to_string(target_temperature_bed, c, PSTR("\x81""C"));
+      c = int_to_string(target_temperature_bed, c, PSTR("`C"));
       
       lcd_draw_detail((char*)buffer);
     }
-  else if (nr == 3)
+  else if (nr == (3 - !Device_isBedHeat))
     {
       c = int_to_string(lround((int(fanSpeed) * 100) / 255.0), c, PSTR("%"));
       
       lcd_draw_detail((char*)buffer);
     }
   else
-      lcd_draw_detailP(PSTR("???"));
-#else
-  char buffer[22];
-  
-  char* c = (char*)buffer;
-  
-  if (nr == 0)
-    lcd_draw_detailP(PSTR("Return to Advanced."));
-  else if (nr == 1)
-  {
-    c = int_to_string(current_temperature[0], c, PSTR("\x81""C"));
-    *c++ = '/';
-    c = int_to_string(target_temperature[0], c, PSTR("\x81""C"));
-    
-    lcd_draw_detail((char*)buffer);
-  }
-  else if (nr == 2)
-  {
-    c = int_to_string(lround((int(fanSpeed) * 100) / 255.0), c, PSTR("%"));
-    
-    lcd_draw_detail((char*)buffer);
-  }
-  else
     lcd_draw_detailP(PSTR("???"));
-#endif
 }
 
 static void lcd_menu_advanced_temperature()
 {
-#if TEMP_SENSOR_BED != 0
 
   LED_NORMAL();
   if (lcd_lib_encoder_pos < 0) lcd_lib_encoder_pos = 0;
-  
-  lcd_advance_menu(PSTR("Tempature"), 4, lcd_advanced_temperature_item, lcd_advanced_temperature_details);
-  
-  if (IS_SELECTED_SCROLL(4)) {
-      lcd_change_to_menu(lcd_menu_advanced_movement, SCROLL_MENU_ITEM_POS(1), MenuDown);
+
+  lcd_advance_menu(LS(PSTR("Temperature"),
+                      PSTR("\x88" "\x80"  "\x89" "\x80"  ),
+                      PSTR("\xC4" "\x82"  "\xC5" "\x82"  )) , 4 - !Device_isBedHeat, lcd_advanced_temperature_item, lcd_advanced_temperature_details);
+
+  if (IS_SELECTED_SCROLL(4 - !Device_isBedHeat)) {
+    lcd_change_to_menu(lcd_menu_advanced_movement, SCROLL_MENU_ITEM_POS(1), MenuDown);
   }
   
   if (lcd_lib_button_pressed)
@@ -717,46 +801,31 @@ static void lcd_menu_advanced_temperature()
           lcd_change_to_menu(lcd_menu_maintenance_advanced, SCROLL_MENU_ITEM_POS(0), MenuBackward);
       else if (IS_SELECTED_SCROLL(1))
         {
+        if (degTargetHotend(0) == 0) {
+          setTargetHotend(220, 0);
+        }
           active_extruder = 0;
           lcd_change_to_menu(lcd_menu_maintenance_advanced_heatup, 0);
           lcd_lib_button_up_down_reversed = true;
         }
-      else if (IS_SELECTED_SCROLL(2))
-        {
+      else if (IS_SELECTED_SCROLL(2) && Device_isBedHeat)
+    {
+      if (degTargetBed() == 0) {
+        setTargetBed(40);
+      }
           lcd_change_to_menu(lcd_menu_maintenance_advanced_bed_heatup, 0);
           lcd_lib_button_up_down_reversed = true;
         }
-      else if (IS_SELECTED_SCROLL(3))
-        {
-          LCD_EDIT_SETTING_BYTE_PERCENT(fanSpeed, "Fan speed", "%", 0, 100);
-        }
-    }
-#else
-  LED_NORMAL();
-  if (lcd_lib_encoder_pos < 0) lcd_lib_encoder_pos = 0;
-  
-  lcd_advance_menu(PSTR("Tempature"), 3, lcd_advanced_temperature_item, lcd_advanced_temperature_details);
-  
-  if (IS_SELECTED_SCROLL(3)) {
-    lcd_change_to_menu(lcd_menu_advanced_movement, SCROLL_MENU_ITEM_POS(1), MenuDown);
-  }
-  
-  if (lcd_lib_button_pressed)
-  {
-    if (IS_SELECTED_SCROLL(0))
-      lcd_change_to_menu(lcd_menu_maintenance_advanced, SCROLL_MENU_ITEM_POS(0), MenuBackward);
-    else if (IS_SELECTED_SCROLL(1))
+      else if (IS_SELECTED_SCROLL(3 - !Device_isBedHeat))
     {
-      active_extruder = 0;
-      lcd_change_to_menu(lcd_menu_maintenance_advanced_heatup, 0);
-      lcd_lib_button_up_down_reversed = true;
-    }
-    else if (IS_SELECTED_SCROLL(2))
-    {
-      LCD_EDIT_SETTING_BYTE_PERCENT(fanSpeed, "Fan speed", "%", 0, 100);
+      LCD_EDIT_SETTING_BYTE_PERCENT(fanSpeed,LS(PSTR("Fan speed"),
+                                                PSTR("\xC0" "\x81"  "\xC1" "\x81"  "\xC2" "\x81"  "\xC3" "\x81"  ),
+                                                PSTR("\xD2" "\x83"  " ""\xD3" "\x83"  "\xC5" "\x82"  )) , LS(PSTR("%"),
+                                                               PSTR("%"),
+                                                               PSTR("%")) , 0, 100);
     }
   }
-#endif
+
 }
 
         /****************************************************************************************
@@ -778,20 +847,56 @@ static void lcd_menu_maintenance_advanced_heatup()
       {
         lcd_lib_button_up_down_reversed = false;
         lcd_change_to_menu(previousMenu, previousEncoderPos, MenuBackward);
+        target_temperature[active_extruder] = 0;
       }
     lcd_lib_clear();
-    lcd_lib_draw_string_centerP(20, PSTR("Nozzle temperature:"));
-    lcd_lib_draw_string_centerP(57, PSTR("Click to return"));
-    char buffer[16];
-    int_to_string(int(current_temperature[active_extruder]), buffer, PSTR("\x81""C/"));
-    int_to_string(int(target_temperature[active_extruder]), buffer+strlen(buffer), PSTR("\x81""C"));
-    lcd_lib_draw_string_center(30, buffer);
+  char buffer[16];
+
+  int_to_string(int(current_temperature[active_extruder]), buffer, PSTR("`C/"));
+  int_to_string(int(target_temperature[active_extruder]), buffer+strlen(buffer), PSTR("`C"));
+
+  lcd_lib_draw_string_centerP(LS(20, 11, 11) , LS(PSTR("Nozzle temperature:"),
+                                                  PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\x88" "\x80"  "\x89" "\x80"  ":"),
+                                                  PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\xC4" "\x82"  "\xC5" "\x82"  ":")) );
+  
+  if (temp_error_handle) {
+    if (temp_error_handle & 0x01) {
+      lcd_lib_draw_string_centerP(LS(40, 37, 37) ,LS(PSTR("Error: PT1 Max Temp"),
+                                                     PSTR("\x80" "\x80"  "\x81" "\x80"   ":PT1" "\xC4" "\x81"  "\x88" "\x80"  ),
+                                                     PSTR("Error: PT1 Max Temp")) );
+    }
+    else if (temp_error_handle & 0x02) {
+      lcd_lib_draw_string_centerP(LS(40, 37, 37),LS(PSTR("Error: PT1 Min Temp"),
+                                                    PSTR("\x80" "\x80"  "\x81" "\x80"   ":PT1" "\xC5" "\x81"  "\x88" "\x80"  ),
+                                                    PSTR("Error: PT1 Min Temp")) );
+    }
+    else if (temp_error_handle & 0x04) {
+      lcd_lib_draw_string_centerP(LS(40, 37, 37),LS(PSTR("Error: PT2 Max Temp"),
+                                                    PSTR("\x80" "\x80"  "\x81" "\x80"   ":PT2" "\xC4" "\x81"  "\x88" "\x80"  ),
+                                                    PSTR("Error: PT2 Max Temp")) );
+    }
+    else if (temp_error_handle & 0x08) {
+      lcd_lib_draw_string_centerP(LS(40, 37, 37),LS(PSTR("Error: PT2 Min Temp"),
+                                                    PSTR("\x80" "\x80"  "\x81" "\x80"   ":PT2" "\xC5" "\x81"  "\x88" "\x80"  ),
+                                                    PSTR("Error: PT2 Min Temp")) );
+    }
+    else{
+      //Should not come here.
+      lcd_lib_draw_string_centerP(LS(40, 37, 37),LS(PSTR("Error: Unknown"),
+                                                    PSTR("\x80" "\x80"  "\x81" "\x80"  ":" "\xC6" "\x81"  "\xC7" "\x81"  ),
+                                                    PSTR("Error: Unknown")) );
+    }
+  }
+  lcd_lib_draw_string_centerP(LS(56, 56-3, 56-3),LS(PSTR("Click to return"),
+                                                    PSTR("\x9E" "\x81"  "\x9F" "\x81"  "OK""\xE4" "\x80"  "\xBD" "\x81"  "\xBE" "\x81"  ),
+                                                    PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
+  
+  lcd_lib_draw_string_center(LS(30, 24, 24), buffer);
 }
 
         /****************************************************************************************
          *bed Heatup
          ****************************************************************************************/
-#if TEMP_SENSOR_BED != 0
 void lcd_menu_maintenance_advanced_bed_heatup()
 {
     LED_NORMAL();
@@ -808,17 +913,22 @@ void lcd_menu_maintenance_advanced_bed_heatup()
       {
         lcd_change_to_menu(previousMenu, previousEncoderPos, MenuBackward);
         lcd_lib_button_up_down_reversed = false;
+        target_temperature_bed = 0;
       }
+
+    char buffer[16];
     
     lcd_lib_clear();
-    lcd_lib_draw_string_centerP(20, PSTR("Buildplate temp.:"));
-    lcd_lib_draw_string_centerP(57, PSTR("Click to return"));
-    char buffer[16];
-    int_to_string(int(current_temperature_bed), buffer, PSTR("\x81""C/"));
-    int_to_string(int(target_temperature_bed), buffer+strlen(buffer), PSTR("\x81""C"));
-    lcd_lib_draw_string_center(30, buffer);
+    lcd_lib_draw_string_centerP(LS(20, 11, 11) , LS(PSTR("Buildplate temp:"),
+                                                  PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xFB" "\x80"  "\xFC" "\x80"  "\x88" "\x80"  "\x89" "\x80"  ":"),
+                                                  PSTR("\xA1" "\x83"  "\xA2" "\x83"  "\xC3" "\x82"  " ""\xC4" "\x82"  "\xC5" "\x82"  )) );
+    lcd_lib_draw_string_centerP(LS(56, 56-3, 56-3) , LS(PSTR("Click to return"),
+                                                      PSTR("\x9E" "\x81"  "\x9F" "\x81"  "OK""\xE4" "\x80"  "\xBD" "\x81"  "\xBE" "\x81"  ),
+                                                      PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
+    int_to_string(int(current_temperature_bed), buffer, PSTR("`C/"));
+    int_to_string(int(target_temperature_bed), buffer+strlen(buffer), PSTR("`C"));
+    lcd_lib_draw_string_center(LS(30, 24, 24) , buffer);
 }
-#endif
     /****************************************************************************************
      * Movement Menu
      *
@@ -826,11 +936,17 @@ void lcd_menu_maintenance_advanced_bed_heatup()
 static char* lcd_advanced_movement_item(uint8_t nr)
 {
   if (nr == 0)
-      strcpy_P(card.longFilename, PSTR("Return"));
+    strcpy_P(card.longFilename, LS(PSTR("Return"),
+                                   PSTR("\xBE" "\x81"  "\x89" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                   PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
-      strcpy_P(card.longFilename, PSTR("Home Head"));
+    strcpy_P(card.longFilename, LS(PSTR("Home Head"),
+                                   PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\xC8" "\x81"  "\x99" "\x80"  ),
+                                   PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\xE9" "\x82"  "\xD4" "\x83"  )) );
   else if (nr == 2)
-      strcpy_P(card.longFilename, PSTR("Move Material"));
+    strcpy_P(card.longFilename, LS(PSTR("Move Material"),
+                                   PSTR("\xAB" "\x81"  "\xB1" "\x80"  "\xDC" "\x80"  "\xF6" "\x80"  "\xC9" "\x81"  "\xF6" "\x80"  ),
+                                   PSTR("\xBB" "\x83"  "\x96" "\x83"   "\xC9" "\x83"  "\xBC" "\x83"  )) );
   else
       strcpy_P(card.longFilename, PSTR("???"));
   return card.longFilename;
@@ -839,14 +955,20 @@ static char* lcd_advanced_movement_item(uint8_t nr)
 static void lcd_advanced_movement_details(uint8_t nr)
 {
   if (nr == 0)
-      lcd_draw_detailP(PSTR("Return to Advanced."));
+      lcd_draw_detailP(LS(PSTR("Return to Advanced."),
+                        PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                        PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
-    {
-      lcd_draw_detailP(PSTR("Home the Head."));
-    }
+  {
+    lcd_draw_detailP(LS(PSTR("Home the Head."),
+                        PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\xC8" "\x81"  "\x99" "\x80"  ),
+                        PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\xE9" "\x82"  "\xD4" "\x83"  )) );
+  }
   else if (nr == 2)
-    {
-      lcd_draw_detailP(PSTR("Move the Material."));
+  {
+    lcd_draw_detailP(LS(PSTR("Move the Material."),
+                        PSTR("\xAB" "\x81"  "\xB1" "\x80"  "\xDC" "\x80"  "\xF6" "\x80"  "\xC9" "\x81"  "\xF6" "\x80"  ),
+                        PSTR("\xB7" "\x83"  "\xBC" "\x83"  "\xB3" "\x83"  "\xB4" "\x83"  " ""\x96" "\x83"  "\x97" "\x83"  " ""\xA6" "\x83"  "\xA7" "\x83"  "\xA3" "\x83"  " ""\xD5" "\x83"  "\xA9" "\x83"  )) );
     }
   else
       lcd_draw_detailP(PSTR("???"));
@@ -855,14 +977,12 @@ static void lcd_advanced_movement_details(uint8_t nr)
 static void lcd_menu_advanced_movement()
 {
   LED_NORMAL();
-  lcd_advance_menu(PSTR("Movement"), 3, lcd_advanced_movement_item, lcd_advanced_movement_details);
+  lcd_advance_menu(LS(PSTR("Movement"),
+                      PSTR("\xB9" "\x81"  "\xBA" "\x81"  ),
+                      PSTR("\x9F" "\x84"  "\xA0" "\x84"  "\xA1" "\x84"  "\xDB" "\x82"  )) , 3, lcd_advanced_movement_item, lcd_advanced_movement_details);
   
   if (IS_SELECTED_SCROLL(-1)) {
-#if TEMP_SENSOR_BED != 0
-    lcd_change_to_menu(lcd_menu_advanced_temperature, SCROLL_MENU_ITEM_POS(3), MenuUp);
-#else
-    lcd_change_to_menu(lcd_menu_advanced_temperature, SCROLL_MENU_ITEM_POS(2), MenuUp);
-#endif
+    lcd_change_to_menu(lcd_menu_advanced_temperature, SCROLL_MENU_ITEM_POS(3 - !Device_isBedHeat), MenuUp);
   }
   
   if (IS_SELECTED_SCROLL(3)) {
@@ -893,6 +1013,7 @@ static void lcd_menu_advanced_movement()
          ****************************************************************************************/
 static void lcd_menu_maintenance_extrude()
 {
+    static unsigned long activeTimer = millis();
     LED_NORMAL();
     if (lcd_lib_encoder_pos / ENCODER_TICKS_PER_SCROLL_MENU_ITEM != 0)
       {
@@ -903,23 +1024,43 @@ static void lcd_menu_maintenance_extrude()
             plan_buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], EMoveSpeed, active_extruder);
             lcd_lib_encoder_pos = 0;
           }
-      }
-    if (lcd_lib_button_pressed)
+          activeTimer = millis();
+          target_temperature[active_extruder] = material[active_extruder].temperature;
+        }
+  
+        if (current_temperature[active_extruder]<200) {
+          activeTimer = millis();
+        }
+  
+        if (millis()-activeTimer > 30000UL) {
+            target_temperature[active_extruder] = 0;
+        }
+
+      if (lcd_lib_button_pressed)
       {
         //        set_extrude_min_temp(EXTRUDE_MINTEMP);
         target_temperature[active_extruder] = 0;
         lcd_change_to_menu(previousMenu, previousEncoderPos, MenuBackward);
       }
-    
+
+      char buffer[16];
+
     lcd_lib_clear();
-    lcd_lib_draw_string_centerP(10, PSTR("Nozzle temperature:"));
-    lcd_lib_draw_string_centerP(30, PSTR("Press UP to retract"));
-    lcd_lib_draw_string_centerP(40, PSTR("Press Down to extrude"));
-    lcd_lib_draw_string_centerP(57, PSTR("Click to return"));
-    char buffer[16];
-    int_to_string(int(current_temperature[active_extruder]), buffer, PSTR("\x81""C/"));
-    int_to_string(int(target_temperature[active_extruder]), buffer+strlen(buffer), PSTR("\x81""C"));
-    lcd_lib_draw_string_center(20, buffer);
+    lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Nozzle temperature:"),
+                                                  PSTR("\xA0" "\x80"  "\xEC" "\x80"  "\x88" "\x80"  "\x89" "\x80"  ":"),
+                                                  PSTR("\xD5" "\x82"  "\xD6" "\x82"  " ""\xC4" "\x82"  "\xC5" "\x82"  ":")));
+    lcd_lib_draw_string_centerP(LS(30, 37, 37), LS(PSTR("Press UP to retract"),
+                                                 PSTR("\xE2" "\x80"  "\xD2" "\x80"  "\xE4" "\x80"  "\xC9" "\x81"  "\xF6" "\x80"   "," "\xE2" "\x80"  "\xE3" "\x80"  "\xE4" "\x80"  "\xDC" "\x80"  "\xF6" "\x80"  ),
+                                                 PSTR("UP""\x96" "\x83"  "\x97" "\x83"  " ""\x96" "\x83"  "\x97" "\x83"  ",Down""\xA6" "\x83"  "\xA7" "\x83"  )));
+    lcd_lib_draw_string_centerP(LS(40, 64, 64), LS(PSTR("Press Down to extrude"),
+                                                 PSTR(""),
+                                                 PSTR("")));
+    lcd_lib_draw_string_centerP(LS(56, 56-3, 56-3), LS(PSTR("Click to return"),
+                                                     PSTR("\x9E" "\x81"  "\x9F" "\x81"  "OK""\xE4" "\x80"  "\xBD" "\x81"  "\xBE" "\x81"  ),
+                                                     PSTR("\xAA" "\x84"  "\xB4" "\x83"  )));
+    int_to_string(int(current_temperature[active_extruder]), buffer, PSTR("`C/"));
+    int_to_string(int(target_temperature[active_extruder]), buffer+strlen(buffer), PSTR("`C"));
+    lcd_lib_draw_string_center(LS(20, 24, 24) , buffer);
 }
 
     /****************************************************************************************
@@ -929,14 +1070,22 @@ static void lcd_menu_maintenance_extrude()
 static char* lcd_advanced_settings_item(uint8_t nr)
 {
   if (nr == 0)
-      strcpy_P(card.longFilename, PSTR("Return"));
+      strcpy_P(card.longFilename, LS(PSTR("Return"),
+                                   PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                   PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
-      strcpy_P(card.longFilename, PSTR("Retraction settings"));
+    strcpy_P(card.longFilename, LS(PSTR("Retraction settings"),
+                                   PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xBE" "\x81"  "\xCB" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                                   PSTR("\xDE" "\x82"  "\xE9" "\x82"  "\xDB" "\x82"  " ""\xB7" "\x83"  "\xD7" "\x83"  " ""\x84" "\x83"  "\x85" "\x83"  )) );
   else if (nr == 2)
-      strcpy_P(card.longFilename, PSTR("Material settings"));
+    strcpy_P(card.longFilename, LS(PSTR("Material settings"),
+                                   PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                                   PSTR("\xA9" "\x83"  "\xA7" "\x84"  " ""\x96" "\x83"  "\x97" "\x83"  " ""\x84" "\x83"  "\x85" "\x83"  )) );
 #ifdef FilamentDetection
   else if (nr == 3)
-      strcpy_P(card.longFilename, PSTR("Material Detection"));
+    strcpy_P(card.longFilename, LS(PSTR("Material Detection"),
+                                   PSTR("\xA7" "\x81"  "\xB1" "\x80"  "\xCC" "\x81"  "\xCD" "\x81"  "\xF5" "\x80"  "\xF6" "\x80"  ),
+                                   PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\xBB" "\x83"  "\xBC" "\x83"  " ""\xD8" "\x83"  "\x85" "\x83"  )) );
 #endif
   else
       strcpy_P(card.longFilename, PSTR("???"));
@@ -946,23 +1095,34 @@ static char* lcd_advanced_settings_item(uint8_t nr)
 static void lcd_advanced_settings_details(uint8_t nr)
 {
   if (nr == 0)
-      lcd_draw_detailP(PSTR("Return to Advanced."));
+      lcd_draw_detailP(LS(PSTR("Return to Advanced."),
+                        PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                        PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
     {
-      lcd_draw_detailP(PSTR("Retraction settings."));
+      lcd_draw_detailP(LS(PSTR("Retraction settings."),
+                        PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xBE" "\x81"  "\xCB" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                        PSTR("\xA9" "\x83"  "\xA7" "\x84"  " ""\xFF" "\x82"  "\xC6" "\x82"  " ""\x84" "\x83"  "\x85" "\x83"  )) );
+  }
     }
   else if (nr == 2)
     {
-      lcd_draw_detailP(PSTR("Material settings."));
+      lcd_draw_detailP(LS(PSTR("Material settings."),
+                        PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                        PSTR("\xA9" "\x83"  "\xA7" "\x84"  " ""\x96" "\x83"  "\x97" "\x83"  " ""\x84" "\x83"  "\x85" "\x83"  )));
     }
 #ifdef FilamentDetection
   else if (nr == 3)
     {
       if (isFilamentDetectionEnable) {
-          lcd_draw_detailP(PSTR("Detection Sensor  ON"));
+          lcd_draw_detailP(LS(PSTR("Detection Sensor  ON"),
+                          PSTR("\xCC" "\x81"  "\xCD" "\x81"  "\xBC" "\x80"  "\xCE" "\x81"  "\xAA" "\x80"  "\x9A" "\x80"  ),
+                          PSTR("\xD8" "\x83"  "\x85" "\x83"  " ""\x83" "\x83"  "\xD9" "\x83"  " ON")));
       }
       else{
-          lcd_draw_detailP(PSTR("Detection Sensor OFF"));
+          lcd_draw_detailP(LS(PSTR("Detection Sensor OFF"),
+                          PSTR("\xCC" "\x81"  "\xCD" "\x81"  "\xBC" "\x80"  "\xCE" "\x81"  "\x9B" "\x80"  "\xCF" "\x81"  ),
+                          PSTR("\xD8" "\x83"  "\x85" "\x83"  " ""\x83" "\x83"  "\xD9" "\x83"  " OFF")));
       }
     }
 #endif
@@ -974,9 +1134,13 @@ void lcd_menu_advanced_settings()
 {
   LED_NORMAL();
 #ifdef FilamentDetection
-  lcd_advance_menu(PSTR("Settings"), 4, lcd_advanced_settings_item, lcd_advanced_settings_details);
+  lcd_advance_menu(LS(PSTR("Settings"),
+                      PSTR("\xE0" "\x80"  "\xE1" "\x80"  ),
+                      PSTR("\x84" "\x83"  "\x85" "\x83"  )) , 4, lcd_advanced_settings_item, lcd_advanced_settings_details);
 #else
-  lcd_advance_menu(PSTR("Settings"), 3, lcd_advanced_settings_item, lcd_advanced_settings_details);
+  lcd_advance_menu(LS(PSTR("Settings"),
+                      PSTR("\xE0" "\x80"  "\xE1" "\x80"  ),
+                      PSTR("\x84" "\x83"  "\x85" "\x83"  )) , 3, lcd_advanced_settings_item, lcd_advanced_settings_details);
 #endif
   
   if (IS_SELECTED_SCROLL(-1)) {
@@ -1021,17 +1185,26 @@ void lcd_menu_advanced_settings()
 
 static char* lcd_retraction_item(uint8_t nr)
 {
-    if (nr == 0)
-        strcpy_P(card.longFilename, PSTR("Return"));
-    else if (nr == 1)
-        strcpy_P(card.longFilename, PSTR("Retract length"));
-    else if (nr == 2)
-        strcpy_P(card.longFilename, PSTR("Retract speed"));
-    else if (nr == 3)
-        strcpy_P(card.longFilename, PSTR("Recover speed"));
-    else
-        strcpy_P(card.longFilename, PSTR("???"));
-    return card.longFilename;
+  
+  if (nr == 0)
+    strcpy_P(card.longFilename, LS(PSTR("Return"),
+                                   PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                   PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
+  else if (nr == 1)
+    strcpy_P(card.longFilename, LS(PSTR("Retract length"),
+                                   PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xD0" "\x81"  "\x89" "\x80"  ),
+                                   PSTR("\xDA" "\x83"  "\xC9" "\x83"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) );
+  else if (nr == 2)
+    strcpy_P(card.longFilename, LS(PSTR("Retract speed"),
+                                   PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xC3" "\x81"  "\x89" "\x80"  ),
+                                   PSTR("\xD0" "\x82"  "\xE8" "\x82"  "\xEC" "\x82"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) );
+  else if (nr == 3)
+    strcpy_P(card.longFilename, LS(PSTR("Recover speed"),
+                                   PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xD1" "\x81"  "\xC8" "\x81"  "\xC3" "\x81"  "\x89" "\x80"  ),
+                                   PSTR("\xD0" "\x82"  "\xE8" "\x82"  "\xEC" "\x82"  " ""\x92" "\x84"  "\xFA" "\x83"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) );
+  else
+    strcpy_P(card.longFilename, PSTR("???"));
+  return card.longFilename;
 }
 
 static void lcd_retraction_details(uint8_t nr)
@@ -1052,7 +1225,9 @@ static void lcd_retraction_details(uint8_t nr)
 static void lcd_menu_maintenance_retraction()
 {
     LED_NORMAL();
-    lcd_scroll_menu(PSTR("RETRACTION"), 4, lcd_retraction_item, lcd_retraction_details);
+    lcd_scroll_menu(LS(PSTR("RETRACTION"),
+                     PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xBE" "\x81"  "\xCB" "\x81"  ),
+                     PSTR("\xA9" "\x83"  "\xA7" "\x84"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) , 4, lcd_retraction_item, lcd_retraction_details);
     if (lcd_lib_button_pressed)
       {
         if (IS_SELECTED_SCROLL(0))
@@ -1060,13 +1235,29 @@ static void lcd_menu_maintenance_retraction()
             Config_StoreSettings();
             lcd_change_to_menu(lcd_menu_advanced_settings, 1, MenuBackward);
           }
-        else if (IS_SELECTED_SCROLL(1))
-            LCD_EDIT_SETTING_FLOAT001(retract_length, "Retract length", "mm", 0, 50);
-        else if (IS_SELECTED_SCROLL(2))
-            LCD_EDIT_SETTING_SPEED(retract_feedrate, "Retract speed", "mm/sec", 0, max_feedrate[E_AXIS] * 60);
-        else if (IS_SELECTED_SCROLL(3))
-            LCD_EDIT_SETTING_SPEED(retract_recover_feedrate, "Recover speed", "mm/sec", 0, max_feedrate[E_AXIS] * 60);
-      }
+        else if (IS_SELECTED_SCROLL(1)){
+      LCD_EDIT_SETTING_FLOAT001(retract_length, LS(PSTR("Retract length") ,
+                                                   PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xD0" "\x81"  "\x89" "\x80"  ),
+                                                   PSTR("\xDA" "\x83"  "\xC9" "\x83"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) ,LS(PSTR("mm"),
+                                                                 PSTR("mm"),
+                                                                 PSTR("mm")) , 0, 50);
+    }
+    else if (IS_SELECTED_SCROLL(2)){
+      LCD_EDIT_SETTING_SPEED(retract_feedrate, LS(PSTR("Retract speed"),
+                                                  PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xC3" "\x81"  "\x89" "\x80"  ),
+                                                  PSTR("\xD0" "\x82"  "\xE8" "\x82"  "\xEC" "\x82"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) ,LS(PSTR("mm/sec"),
+                                                                PSTR("mm/sec"),
+                                                                PSTR("mm/sec")), 0, max_feedrate[E_AXIS] * 60);
+    }
+    else if (IS_SELECTED_SCROLL(3)){
+      LCD_EDIT_SETTING_SPEED(retract_recover_feedrate, LS(PSTR("Recover speed"),
+                                                          PSTR("\xBE" "\x81"  "\xCB" "\x81"  "\xD1" "\x81"  "\xC8" "\x81"  "\xC3" "\x81"  "\x89" "\x80"  ),
+                                                          PSTR("\xD0" "\x82"  "\xE8" "\x82"  "\xEC" "\x82"  " ""\x92" "\x84"  "\xFA" "\x83"  " ""\xB7" "\x83"  "\xD7" "\x83"  )) , LS(PSTR("mm/sec"),
+                                                                         PSTR("mm/sec"),
+                                                                         PSTR("mm/sec")), 0, max_feedrate[E_AXIS] * 60);
+    }
+  }
+
 }
 
     /****************************************************************************************
@@ -1076,13 +1267,21 @@ static void lcd_menu_maintenance_retraction()
 static char* lcd_advanced_about_item(uint8_t nr)
 {
   if (nr == 0)
-      strcpy_P(card.longFilename, PSTR("Return"));
+    strcpy_P(card.longFilename, LS(PSTR("Return"),
+                                   PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                   PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   else if (nr == 1)
-      strcpy_P(card.longFilename, PSTR("Factory Reset"));
+    strcpy_P(card.longFilename, LS(PSTR("Factory Reset"),
+                                   PSTR("\xD1" "\x81"  "\xC8" "\x81"  "\x8B" "\x81"  "\xD2" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                                   PSTR("\x82" "\x83"  "\x83" "\x83"  "\x99" "\x83"  )) );
   else if (nr == 2)
-      strcpy_P(card.longFilename, PSTR("Machine State"));
+    strcpy_P(card.longFilename, LS(PSTR("Machine State"),
+                                   PSTR("\xE0" "\x80"  "\xEB" "\x80"  "\xD3" "\x81"  "\xD4" "\x81"  ),
+                                   PSTR("\x84" "\x83"  "\x8F" "\x83"  " ""\xCA" "\x83"  "\xDB" "\x83"  )) );
   else if (nr == 3)
-      strcpy_P(card.longFilename, PSTR("Version"));
+    strcpy_P(card.longFilename, LS(PSTR("Version"),
+                                   PSTR("\xD5" "\x81"  "\xD6" "\x81"  "\xD7" "\x81"  "\xBC" "\x81"  ),
+                                   PSTR("\xE4" "\x83"  "\xAB" "\x84"  " ""\x86" "\x83"  "\xDC" "\x83"  )) );
   else
       strcpy_P(card.longFilename, PSTR("???"));
   return card.longFilename;
@@ -1090,20 +1289,65 @@ static char* lcd_advanced_about_item(uint8_t nr)
 
 static void lcd_advanced_about_details(uint8_t nr)
 {
-  if (nr == 0)
-      lcd_draw_detailP(PSTR("Return to Advanced."));
-  else if (nr == 1)
-    {
-      lcd_draw_detailP(PSTR("Factory Reset."));
+  char buffer[32];
+  char* bufferPtr;
+  bufferPtr = buffer;
+  strcpy_P(bufferPtr, PSTR(STRING_CONFIG_H_AUTHOR));
+  bufferPtr += strlen_P(PSTR(STRING_CONFIG_H_AUTHOR));
+  
+  if (nr == 0){
+    lcd_draw_detailP(LS(PSTR("Return to Advanced."),
+                        PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                        PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
+  }
+  else if (nr == 1){
+    lcd_draw_detailP(LS(PSTR("Factory Reset."),
+                        PSTR("\xD1" "\x81"  "\xC8" "\x81"  "\x8B" "\x81"  "\xD2" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                        PSTR("\x82" "\x83"  "\x83" "\x83"  "\x99" "\x83"  )) );
+  }
+  else if (nr == 2){
+    lcd_draw_detailP(LS(PSTR("Machine State."),
+                        PSTR("\xE0" "\x80"  "\xEB" "\x80"  "\xD3" "\x81"  "\xD4" "\x81"  ),
+                        PSTR("\x84" "\x83"  "\x8F" "\x83"   "\xCA" "\x83"  "\xDB" "\x83"  )) );
+  }
+  else if (nr == 3){
+    switch (Device_type) {
+      case OVERLORD_TYPE_PNHW:
+        strcpy_P(bufferPtr, PSTR("PNHW"));
+        break;
+      case OVERLORD_TYPE_PNHL:
+        strcpy_P(bufferPtr, PSTR("PNHL"));
+        break;
+      case OVERLORD_TYPE_PNH:
+        strcpy_P(bufferPtr, PSTR("PNH"));
+        break;
+      case OVERLORD_TYPE_P:
+        strcpy_P(bufferPtr, PSTR("P"));
+        break;
+      case OVERLORD_TYPE_MBNH:
+        strcpy_P(bufferPtr, PSTR("MBNH"));
+        break;
+      case OVERLORD_TYPE_MNH:
+        strcpy_P(bufferPtr, PSTR("MNH"));
+        break;
+      case OVERLORD_TYPE_MB:
+        strcpy_P(bufferPtr, PSTR("MB"));
+        break;
+      case OVERLORD_TYPE_M:
+        strcpy_P(bufferPtr, PSTR("M"));
+        break;
+      case OVERLORD_TYPE_PS:
+        strcpy_P(bufferPtr, PSTR("PS"));
+        break;
+      case OVERLORD_TYPE_MS:
+        strcpy_P(bufferPtr, PSTR("MS"));
+        break;
+      default:
+        break;
     }
-  else if (nr == 2)
-    {
-      lcd_draw_detailP(PSTR("Machine State."));
-    }
-  else if (nr == 3)
-    {
-      lcd_draw_detailP(PSTR(STRING_CONFIG_H_AUTHOR));
-    }
+    
+    lcd_draw_detail(buffer);
+  }
   else
       lcd_draw_detailP(PSTR("???"));
 }
@@ -1115,7 +1359,9 @@ static void lcd_menu_advanced_about()
   if (lcd_lib_encoder_pos >= 3 * ENCODER_TICKS_PER_SCROLL_MENU_ITEM)
       lcd_lib_encoder_pos = 3 * ENCODER_TICKS_PER_SCROLL_MENU_ITEM;
   
-  lcd_advance_menu(PSTR("About"), 4, lcd_advanced_about_item, lcd_advanced_about_details);
+  lcd_advance_menu(LS(PSTR("About"),
+                      PSTR("\x9B" "\x80"  "\xBB" "\x81"  ),
+                      PSTR("\xE5" "\x83"  "\xA3" "\x84"  "\xA4" "\x84"  )) , 4, lcd_advanced_about_item, lcd_advanced_about_details);
   
   if (IS_SELECTED_SCROLL(-1)) {
       lcd_change_to_menu(lcd_menu_advanced_settings, SCROLL_MENU_ITEM_POS(2), MenuUp);
@@ -1147,22 +1393,84 @@ static void lcd_menu_advanced_about()
          ****************************************************************************************/
 void lcd_menu_advanced_version()
 {
-  char eepromBuffer[9]={0};
-    if (lcd_lib_encoder_pos>=2) {
+  char buffer[32]={0};
+    if (lcd_lib_encoder_pos <= -2) {
         doAdvancedLevel();
         lcd_change_to_menu(lcd_menu_advanced_level);
     }
-    
-    LED_NORMAL();
-    lcd_info_screen(lcd_menu_advanced_about, NULL, PSTR("Return"));
-    nextEncoderPos=3;
+    else if (lcd_lib_encoder_pos >= 2){
+      lcd_change_to_menu(lcd_menu_device);
+    }
+
+  char* bufferPtr;
+
+  LED_NORMAL();
+
+  lcd_info_screen(lcd_menu_advanced_about, NULL, LS(PSTR("Return"),
+                                                    PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                                    PSTR("\xAA" "\x84"  "\xB4" "\x83"  )) );
   
-    eeprom_read_block(eepromBuffer, (uint8_t*)EEPROM_DEVICE_ID, 8);
+  strcpy_P(buffer, LS(PSTR("Device ID:"),
+                      PSTR("\xE0" "\x80"  "\xEB" "\x80"  "\xD8" "\x81"  "\xD9" "\x81"  ),
+                      PSTR("\x84" "\x83"  "\x8F" "\x83"  " ID")) );
+  bufferPtr = buffer + LS(strlen_P(PSTR("Device ID:")),
+                          strlen_P(PSTR("\xE0" "\x80"  "\xEB" "\x80"  "\xD8" "\x81"  "\xD9" "\x81"  )),
+                          strlen_P(PSTR("\x84" "\x83"  "\x8F" "\x83"  " ID"))) ;
+  eeprom_read_block(bufferPtr, (uint8_t*)EEPROM_DEVICE_ID, 8);
+  *(bufferPtr + 9) = 0;
   
-    lcd_lib_draw_string_centerP(10, PSTR(STRING_VERSION_CONFIG_H));
-    lcd_lib_draw_string_centerP(20, PSTR(STRING_CONFIG_H_AUTHOR));
-    lcd_lib_draw_string_centerP(30, PSTR("Device ID:"));
-    lcd_lib_draw_string_center(40, eepromBuffer);
+  if (*bufferPtr <' ' || *bufferPtr >'}') {
+    strcpy_P(bufferPtr, PSTR("Unknown"));
+  }
+  
+//  lcd_lib_draw_string_center(LS(30,
+//                                37,
+//                                37) , buffer);
+  
+  
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , PSTR(STRING_VERSION_CONFIG_H));
+  strcpy_P(buffer, PSTR(STRING_CONFIG_H_AUTHOR));
+  bufferPtr = buffer + strlen_P(PSTR(STRING_CONFIG_H_AUTHOR));
+  
+  switch (Device_type) {
+    case OVERLORD_TYPE_PNHW:
+      strcpy_P(bufferPtr, PSTR("PNHW"));
+      break;
+    case OVERLORD_TYPE_PNHL:
+      strcpy_P(bufferPtr, PSTR("PNHL"));
+      break;
+    case OVERLORD_TYPE_PNH:
+      strcpy_P(bufferPtr, PSTR("PNH"));
+      break;
+    case OVERLORD_TYPE_P:
+      strcpy_P(bufferPtr, PSTR("P"));
+      break;
+    case OVERLORD_TYPE_MBNH:
+      strcpy_P(bufferPtr, PSTR("MBNH"));
+      break;
+    case OVERLORD_TYPE_MNH:
+      strcpy_P(bufferPtr, PSTR("MNH"));
+      break;
+    case OVERLORD_TYPE_MB:
+      strcpy_P(bufferPtr, PSTR("MB"));
+      break;
+    case OVERLORD_TYPE_M:
+      strcpy_P(bufferPtr, PSTR("M"));
+      break;
+    case OVERLORD_TYPE_PS:
+      strcpy_P(bufferPtr, PSTR("PS"));
+      break;
+    case OVERLORD_TYPE_MS:
+      strcpy_P(bufferPtr, PSTR("MS"));
+      break;
+    default:
+      break;
+  }
+  
+  lcd_lib_draw_string_center(LS(20, 24, 24) , buffer);
+
+  nextEncoderPos=3;
+
 }
 
 #define SCREW_NORMAL 0
@@ -1185,12 +1493,18 @@ static void doAdvancedLevel()
     current_position[Y_AXIS]=0;
     current_position[Z_AXIS]=0;
     current_position[E_AXIS]=0;
-    //Only move Z.
     plan_set_position_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
     
-    current_position[X_AXIS]=MANUAL_Z_HOME_POS;
-    current_position[Y_AXIS]=MANUAL_Z_HOME_POS;
-    current_position[Z_AXIS]=MANUAL_Z_HOME_POS;
+  if (Device_isPro) {
+    current_position[X_AXIS]=Z_HOME_POS_PRO;
+    current_position[Y_AXIS]=Z_HOME_POS_PRO;
+    current_position[Z_AXIS]=Z_HOME_POS_PRO;
+  }
+  else{
+    current_position[X_AXIS]=Z_HOME_POS_MINI;
+    current_position[Y_AXIS]=Z_HOME_POS_MINI;
+    current_position[Z_AXIS]=Z_HOME_POS_MINI;
+  }
     current_position[E_AXIS]=0;
     feedrate=4000;
     
@@ -1204,7 +1518,9 @@ static void doAdvancedLevelDone()
 
 static void lcd_menu_advanced_level()
 {
-    lcd_info_screen(lcd_menu_advanced_version, doAdvancedLevelDone, PSTR("DONE"));
+    lcd_info_screen(lcd_menu_advanced_version, doAdvancedLevelDone, LS(PSTR("DONE"),
+                                                                     PSTR("\xDA" "\x81"  "\xBB" "\x80"  ),
+                                                                     PSTR("\xDD" "\x83"  "\x97" "\x83"  )) );
     
     char buffer[16];
     int_to_string(int(st_get_position(X_AXIS)), buffer, NULL);
@@ -1222,13 +1538,19 @@ static void lcd_menu_advanced_level()
 
     switch (xState) {
         case SCREW_NORMAL:
-            lcd_lib_draw_stringP(0, 40, PSTR("O"));
+            lcd_lib_draw_stringP(0, LS(40, 37, 37), LS(PSTR("O"),
+                                                 PSTR(CHINESE_POINT),
+                                                 PSTR(CHINESE_POINT)) );
             break;
         case SCREW_UP:
-            lcd_lib_draw_stringP(0, 40, PSTR("\x82"));
+            lcd_lib_draw_stringP(0, LS(40, 37, 37), LS(PSTR(ENGLISH_UP),
+                                                 PSTR(CHINESE_UP),
+                                                 PSTR(CHINESE_UP)) );
             break;
         case SCREW_DOWN:
-            lcd_lib_draw_stringP(0, 40, PSTR("\x83"));
+            lcd_lib_draw_stringP(0, LS(40, 37, 37), LS(PSTR(ENGLISH_DOWN),
+                                                 PSTR(CHINESE_DOWN),
+                                                 PSTR(CHINESE_DOWN)) );
             break;
         default:
             break;
@@ -1236,13 +1558,19 @@ static void lcd_menu_advanced_level()
     
     switch (yState) {
         case SCREW_NORMAL:
-            lcd_lib_draw_stringP(100, 40, PSTR("O"));
+            lcd_lib_draw_stringP(100, LS(40, 37, 37), LS(PSTR("O"),
+                                                   PSTR(CHINESE_POINT),
+                                                   PSTR(CHINESE_POINT)));
             break;
         case SCREW_UP:
-            lcd_lib_draw_stringP(100, 40, PSTR("\x82"));
+            lcd_lib_draw_stringP(100, LS(40, 37, 37), LS(PSTR(ENGLISH_UP),
+                                                   PSTR(CHINESE_UP),
+                                                   PSTR(CHINESE_UP)));
             break;
         case SCREW_DOWN:
-            lcd_lib_draw_stringP(100, 40, PSTR("\x83"));
+            lcd_lib_draw_stringP(100, LS(40, 37, 37), LS(PSTR(ENGLISH_DOWN),
+                                                   PSTR(CHINESE_DOWN),
+                                                   PSTR(CHINESE_DOWN)) );
             break;
         default:
             break;
@@ -1250,13 +1578,19 @@ static void lcd_menu_advanced_level()
     
     switch (zState) {
         case SCREW_NORMAL:
-            lcd_lib_draw_stringP(50, 30, PSTR("O"));
+            lcd_lib_draw_stringP(50, LS(30, 24, 24) , LS(PSTR("O"),
+                                                   PSTR(CHINESE_POINT),
+                                                   PSTR(CHINESE_POINT)));
             break;
         case SCREW_UP:
-            lcd_lib_draw_stringP(50, 30, PSTR("\x82"));
+            lcd_lib_draw_stringP(50, LS(30, 24, 24), LS(PSTR(ENGLISH_UP),
+                                                  PSTR(CHINESE_UP),
+                                                  PSTR(CHINESE_UP)));
             break;
         case SCREW_DOWN:
-            lcd_lib_draw_stringP(50, 30, PSTR("\x83"));
+            lcd_lib_draw_stringP(50, LS(30, 24, 24), LS(PSTR(ENGLISH_DOWN),
+                                                  PSTR(CHINESE_DOWN),
+                                                  PSTR(CHINESE_DOWN)) );
             break;
         default:
             break;
@@ -1402,41 +1736,57 @@ static void lcd_menu_advanced_level()
          ****************************************************************************************/
 static void lcd_menu_advanced_state()
 {
-    LED_NORMAL();
-    lcd_info_screen(previousMenu, NULL, PSTR("Return"));
-    nextEncoderPos=2;
+  LED_NORMAL();
+
+  char buffer[32];
+  char* c;
+  
+  lcd_info_screen(previousMenu, NULL, LS(PSTR("Return"),
+                                         PSTR("\xBD" "\x81"  "\xBE" "\x81"  "\xD2" "\x80"  "\xC9" "\x80"  "\xBF" "\x81"  ),
+                                         PSTR("\xAA" "\x84"  "\xB4" "\x83"  ) ));
+  if (Device_isBattery) {
     if (READ(BatteryPin)) {
-        lcd_lib_draw_stringP(5, 10, PSTR("Battery:    Charging"));
+      lcd_lib_draw_stringP(5, LS(10, 1, 1) , LS(PSTR("Battery:    Charging"),
+                                                PSTR("\x95" "\x80"  "\xDB" "\x81"  ":  ""\xAE" "\x80"  "\xAF" "\x80"  "\xDC" "\x81"  "\x95" "\x80"  ),
+                                                PSTR("\xDE" "\x83"  "\xCA" "\x82"  "\xE9" "\x82"  ": ""\xDF" "\x83"  "\xCE" "\x82"  "\xC0" "\x82"  )) );
     }
     else{
-        lcd_lib_draw_stringP(5, 10, PSTR("Battery:     Charged"));
+      lcd_lib_draw_stringP(5, LS(10, 1, 1), LS(PSTR("Battery:     Charged"),
+                                               PSTR("\x95" "\x80"  "\xDB" "\x81"  ":    " "\xDD" "\x81"  "\x95" "\x80"  "\xDE" "\x81"  ),
+                                               PSTR("\xDE" "\x83"  "\xCA" "\x82"  "\xE9" "\x82"  ": ""\xDF" "\x83"  "\xCE" "\x82"  " ""\xDD" "\x83"  "\x97" "\x83"  )) );
     }
-    
-    char buffer[32];
-    char* c;
-    
-    lcd_lib_draw_stringP(5, 20, PSTR("Life time:"));
-    c = buffer;
-    c = int_to_string(lifetime_minutes / 60, c, PSTR(":"));
-    if (lifetime_minutes % 60 < 10)
-        *c++ = '0';
-    c = int_to_string(lifetime_minutes % 60, c);
-    
-    lcd_lib_draw_string((21-strlen(buffer))*6-1, 20, buffer);
-    
-    
-    lcd_lib_draw_stringP(5, 30, PSTR("Print time:"));
-    c = buffer;
-    c = int_to_string(lifetime_print_minutes / 60, c, PSTR(":"));
-    if (lifetime_print_minutes % 60 < 10)
-        *c++ = '0';
-    c = int_to_string(lifetime_print_minutes % 60, c);
-    lcd_lib_draw_string((21-strlen(buffer))*6-1, 30, buffer);
+  }
+  
+  lcd_lib_draw_stringP(5, LS(20, 13, 13) , LS(PSTR("Life time:"),
+                                              PSTR("\xA6" "\x80"  "\xA7" "\x80"  "\xDF" "\x81"  "\xE0" "\x81"   ":"),
+                                              PSTR("Life time:")) );
+  c = buffer;
+  c = int_to_string(lifetime_minutes / 60, c, PSTR(":"));
+  if (lifetime_minutes % 60 < 10)
+    *c++ = '0';
+  c = int_to_string(lifetime_minutes % 60, c);
+  
+  lcd_lib_draw_string((21-strlen(buffer))*6-1, LS(20, 13, 13) , buffer);
+  
+  
+  lcd_lib_draw_stringP(5, LS(30, 25, 25) , LS(PSTR("Print time:"),
+                                              PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xE1" "\x81"  "\xE2" "\x81"  ":"),
+                                              PSTR("Print time:")) );
+  c = buffer;
+  c = int_to_string(lifetime_print_minutes / 60, c, PSTR(":"));
+  if (lifetime_print_minutes % 60 < 10)
+    *c++ = '0';
+  c = int_to_string(lifetime_print_minutes % 60, c);
+  lcd_lib_draw_string((21-strlen(buffer))*6-1, LS(30, 25, 25) , buffer);
+  
+  lcd_lib_draw_stringP(5, LS(40, 37, 37), LS(PSTR("Material:"),
+                                 PSTR("\xF5" "\x80"  "\xF6" "\x80"  ":"),
+                                 PSTR("\x96" "\x83"  "\x97" "\x83"  ":")) );
+  c = buffer;
+  c = int_to_string(lifetime_print_centimeters / 100, c, PSTR("m"));
+  lcd_lib_draw_string((21-strlen(buffer))*6-1, LS(40, 37, 37) , buffer);
 
-    lcd_lib_draw_stringP(5, 40, PSTR("Material:"));
-    c = buffer;
-    c = int_to_string(lifetime_print_centimeters / 100, c, PSTR("m"));
-    lcd_lib_draw_string((21-strlen(buffer))*6-1, 40, buffer);
+  nextEncoderPos=2;
 }
 
         /****************************************************************************************
@@ -1470,10 +1820,101 @@ static void doFactoryReset()
 static void lcd_menu_advanced_factory_reset()
 {
     LED_GLOW();
-    lcd_question_screen(NULL, doFactoryReset, PSTR("YES"), previousMenu, NULL, PSTR("NO"));
-    nextEncoderPos=1;
-    lcd_lib_draw_string_centerP(10, PSTR("Reset everything"));
-    lcd_lib_draw_string_centerP(20, PSTR("to default?"));
+    lcd_question_screen(NULL, doFactoryReset, LS(PSTR("YES"),
+                                               PSTR("\x8C" "\x82"  "\xDB" "\x80"  ),
+                                               PSTR("\x91" "\x84"  "\xB6" "\x83"  )) , previousMenu, NULL, LS(PSTR("NO"),
+                                                                                  PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
+                                                                                  PSTR("\xFF" "\x82"  "\xC6" "\x82"  )) );
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Reset everything"),
+                                                  PSTR("\x81" "\x81"  "\x94" "\x80"  "\xE3" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
+                                                  PSTR("\xE9" "\x82"  "\xD4" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("to default?"),
+                                                  PSTR("\xD1" "\x81"  "\xC8" "\x81"  "\x89" "\x81"  "\xDA" "\x80"  "\xDB" "\x80"  "?"),
+                                                  PSTR("\x80" "\x83"  "\x81" "\x83"  "\xDB" "\x82"  "?")) );
+  nextEncoderPos=1;
 }
 
+
+
+/****************************************************************************************
+ * device setting
+ ****************************************************************************************/
+static char* lcd_menu_device_item(uint8_t nr)
+{
+  if (nr == 0)
+    strcpy_P(card.longFilename, PSTR("Return"));
+  else if (nr == OVERLORD_TYPE_P)
+    strcpy_P(card.longFilename, PSTR("P"));
+  else if (nr == OVERLORD_TYPE_M)
+    strcpy_P(card.longFilename, PSTR("M"));
+  else if (nr == OVERLORD_TYPE_MB)
+    strcpy_P(card.longFilename, PSTR("MB"));
+  else if (nr == OVERLORD_TYPE_PNH)
+    strcpy_P(card.longFilename, PSTR("PNH"));
+  else if (nr == OVERLORD_TYPE_MNH)
+    strcpy_P(card.longFilename, PSTR("MNH"));
+  else if (nr == OVERLORD_TYPE_MBNH)
+    strcpy_P(card.longFilename, PSTR("MBNH"));
+  else if (nr == OVERLORD_TYPE_PNHW)
+    strcpy_P(card.longFilename, PSTR("PNHW"));
+  else if (nr == OVERLORD_TYPE_PNHL)
+    strcpy_P(card.longFilename, PSTR("PNHL"));
+  else if (nr == OVERLORD_TYPE_PS)
+    strcpy_P(card.longFilename, PSTR("PS"));
+  else if (nr == OVERLORD_TYPE_MS)
+    strcpy_P(card.longFilename, PSTR("MS"));
+  else
+    strcpy_P(card.longFilename, PSTR("???"));
+
+  return card.longFilename;
+}
+
+static void lcd_menu_device_details(uint8_t nr)
+{
+  if (nr == 0)
+    lcd_draw_detailP(PSTR("Return"));
+  else if(nr == OVERLORD_TYPE_P)
+    lcd_draw_detailP(PSTR("Pro"));
+  else if(nr == OVERLORD_TYPE_M)
+    lcd_draw_detailP(PSTR("Mini"));
+  else if(nr == OVERLORD_TYPE_MB)
+    lcd_draw_detailP(PSTR("Mini Bed Heater"));
+  else if(nr == OVERLORD_TYPE_PNH)
+    lcd_draw_detailP(PSTR("Pro New Heater"));
+  else if(nr == OVERLORD_TYPE_MNH)
+    lcd_draw_detailP(PSTR("Mini New Heater"));
+  else if(nr == OVERLORD_TYPE_MBNH)
+    lcd_draw_detailP(PSTR("Mini Bed New Heater"));
+  else if(nr == OVERLORD_TYPE_PNHW)
+    lcd_draw_detailP(PSTR("Pro New Heater Wifi"));
+  else if(nr == OVERLORD_TYPE_PNHL)
+    lcd_draw_detailP(PSTR("Pro New Heater Lifeng"));
+  else if(nr == OVERLORD_TYPE_PS)
+    lcd_draw_detailP(PSTR("Pro with Sensor"));
+  else if(nr == OVERLORD_TYPE_MS)
+    lcd_draw_detailP(PSTR("Mini with Sensor"));
+}
+
+void lcd_menu_device()
+{
+  LED_NORMAL();
+  
+  lcd_scroll_menu(LS(PSTR("Device"),
+                     PSTR("\xE0" "\x80"  "\xEB" "\x80"  ),
+                     PSTR("\xCC" "\x82"  "\x8F" "\x83"  )) , OVERLORD_TYPE_MAX - OVERLORD_TYPE_MIN+2, lcd_menu_device_item, lcd_menu_device_details);
+  if (lcd_lib_button_pressed)
+  {
+    if (IS_SELECTED_SCROLL(0))
+    {
+      lcd_change_to_menu(lcd_menu_advanced_version, 0, MenuBackward);
+    }
+    else{
+      storeDevice(lcd_lib_encoder_pos);
+      retrieveDevice();
+      Config_ResetDefault();
+      Config_StoreSettings();
+      doFactoryReset();
+    }
+  }
+}
 #endif//ENABLE_ULTILCD2

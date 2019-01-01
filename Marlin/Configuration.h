@@ -20,39 +20,6 @@
 #define BAUDRATE 250000
 //#define BAUDRATE 115200
 
-//// The following define selects which electronics board you have. Please choose the one that matches your setup
-// 10 = Gen7 custom (Alfons3 Version) "https://github.com/Alfons3/Generation_7_Electronics"
-// 11 = Gen7 v1.1, v1.2 = 11
-// 12 = Gen7 v1.3
-// 13 = Gen7 v1.4
-// 3  = MEGA/RAMPS up to 1.2 = 3
-// 33 = RAMPS 1.3 / 1.4 (Power outputs: Extruder, Fan, Bed)
-// 34 = RAMPS 1.3 / 1.4 (Power outputs: Extruder0, Extruder1, Bed)
-// 4  = Duemilanove w/ ATMega328P pin assignment
-// 5  = Gen6
-// 51 = Gen6 deluxe
-// 6  = Sanguinololu < 1.2
-// 62 = Sanguinololu 1.2 and above
-// 63 = Melzi
-// 64 = STB V1.1
-// 65 = Azteeg X1
-// 7  = Ultimaker
-// 71 = Ultimaker (Older electronics. Pre 1.5.4. This is rare)
-// 72 = Ultiboard v2.0 (includes Ultimaker 2)
-// 77 = 3Drag Controller
-// 8  = Teensylu
-// 80 = Rumba
-// 81 = Printrboard (AT90USB1286)
-// 82 = Brainwave (AT90USB646)
-// 9  = Gen3+
-// 70 = Megatronics
-// 701= Megatronics v2.0
-// 702= Minitronics v1.0
-// 90 = Alpha OMCA board
-// 91 = Final OMCA board
-// 301 = Rambo
-// 21 = Elefu Ra Board (v3)
-
 #ifndef MOTHERBOARD
 #define MOTHERBOARD 720
 #endif
@@ -75,63 +42,53 @@
 //============================== Testing Settings =============================
 //===========================================================================
 
-#define OverLord
-
-#define OVERLORD_PRO
-
-//#define OVERLORD_WIFI
-
-#ifdef OVERLORD_PRO
-#define STRING_CONFIG_H_AUTHOR "Version 2.1.5P -beta 2" // Who made the changes.
-#else
-#define STRING_CONFIG_H_AUTHOR "Version 2.1.5M -beta 2"
-#endif
 
 
-#ifdef OverLord
+
+#define OVERLORD_BETA "-B7 "
+// #define OVERLORD_BETA ""
+
+#define OVERLORD_CHINESE "\xFF"
+
+#define OVERLORD_VERSION "Ver.2.3.2"
+
+#define STRING_CONFIG_H_AUTHOR OVERLORD_VERSION OVERLORD_BETA
 
 //the step offset of each axis
 //#define DirectionOffsetX 0
 //#define DirectionOffsetY 0
 //#define DirectionOffsetZ 0
 
-#define PushButton
-#define SDUPS
-#define DELTA
+#define FILAMENT_REVERSAL_LENGTH_PRO      800
+#define FILAMENT_FORWARD_LENGTH_PRO       740
+
+#define FILAMENT_REVERSAL_LENGTH_MINI      700
+#define FILAMENT_FORWARD_LENGTH_MINI       640
+
 
 #define _DEBUG
+#define _BED_DEBUG
 
-
-#define DeltaFastAlgorithm
 
 #define ClearError
 #define CUSTOM_MENDEL_NAME "OverLord"
-#define CUSTOM_FIRMWARE_URL "http://www.dreammaker.cc/?page_id=385"
+//#define CUSTOM_FIRMWARE_URL "http://www.dreammaker.cc/?page_id=385"
 
-#define NewSDRead
-
-#define VotageDetection
-
-#define PowerCheck
-
-#define NewPower
 #define PowerOnDemand
 
 #define SoftwareAutoLevel
 
 //#define FilamentDetection
 
-#define TouchPlateOffset 0.3
+#define TouchPlateOffset 0.6
 
-//#define GATE_PRINT
-
-#endif
+#define TouchPlateOffsetSensor 1.0
 
 //===========================================================================
 //============================== Delta Settings =============================
 //===========================================================================
 // Enable DELTA kinematics
-//#define DELTA
+#define DELTA
 
 // Make delta curves from many straight lines (linear interpolation).
 // This is a trade-off between visible corners (not enough segments)
@@ -196,17 +153,12 @@
 #define TEMP_SENSOR_0 20
 #define TEMP_SENSOR_1 20
 #define TEMP_SENSOR_2 0
-#ifdef OVERLORD_PRO
 #define TEMP_SENSOR_BED 1
-#else
-#define TEMP_SENSOR_BED 0
-#endif
-//#define TEMP_SENSOR_BED 0
 
 
 // This makes temp sensor 1 a redundant sensor for sensor 0. If the temperatures difference between these sensors is to high the print will be aborted.
 #define TEMP_SENSOR_1_AS_REDUNDANT
-#define MAX_REDUNDANT_TEMP_SENSOR_DIFF 40
+#define MAX_REDUNDANT_TEMP_SENSOR_DIFF 100
 
 // Actual temperature must be close to target for this long before M109 returns success
 #define TEMP_RESIDENCY_TIME 3   // (seconds)
@@ -224,9 +176,9 @@
 // When temperature exceeds max temp, your heater will be switched off.
 // This feature exists to protect your hotend from overheating accidentally, but *NOT* from thermistor short/failure!
 // You should use MINTEMP for thermistor short/failure protection.
-#define HEATER_0_MAXTEMP 275
-#define HEATER_1_MAXTEMP 275
-#define HEATER_2_MAXTEMP 275
+#define HEATER_0_MAXTEMP 280
+#define HEATER_1_MAXTEMP 280
+#define HEATER_2_MAXTEMP 280
 #define BED_MAXTEMP 115
 
 //Check if the heater heats up MAX_HEATING_TEMPERATURE_INCREASE within MAX_HEATING_CHECK_MILLIS while the PID was at the maximum.
@@ -243,16 +195,8 @@
 // Comment the following line to disable PID and enable bang-bang.
 #define PIDTEMP
 
-#ifdef OVERLORD
-#define BANG_MAX 200 // limits current to nozzle while in bang-bang mode; 255=full current
-#define PID_MAX 200 // limits current to nozzle while PID is active (see PID_FUNCTIONAL_RANGE below); 255=full current
-#define PID_CLOSE_RESTRICT 40
-#else
-#define BANG_MAX 160 // limits current to nozzle while in bang-bang mode; 255=full current
-#define PID_MAX 160 // limits current to nozzle while PID is active (see PID_FUNCTIONAL_RANGE below); 255=full current
+//  #define PID_MAX 255 // limits current to nozzle while PID is active (see PID_FUNCTIONAL_RANGE below); 255=full current
 #define PID_CLOSE_RESTRICT 0
-#endif
-
 
 #ifdef PIDTEMP
   //#define PID_DEBUG // Sends debug data to the serial port.
@@ -266,11 +210,13 @@
 #define PID_dT ((OVERSAMPLENR * 8.0)/(F_CPU / 64.0 / 256.0)) //sampling period of the temperature routine
 
 // If you are using a preconfigured hotend then you can use one of the value sets by uncommenting it
-#if defined(OverLord)
+  #define  DEFAULT_NEW_HEATER_Kp 12.25
+  #define  DEFAULT_NEW_HEATER_Ki 0.94f
+  #define  DEFAULT_NEW_HEATER_Kd 39.75
+
   #define  DEFAULT_Kp 3.61
   #define  DEFAULT_Ki 0.22
   #define  DEFAULT_Kd 15.16
-#endif
 
 
 // Ultimaker
@@ -344,7 +290,7 @@
 #define PREVENT_LENGTHY_EXTRUDE
 
 #define EXTRUDE_MINTEMP 170
-#define EXTRUDE_MAXLENGTH (X_MAX_LENGTH+Y_MAX_LENGTH) //prevent extrusion of very large distances.
+#define EXTRUDE_MAXLENGTH (300) //prevent extrusion of very large distances.
 
 //===========================================================================
 //=============================Mechanical Settings===========================
@@ -363,7 +309,7 @@
   #define ENDSTOPPULLUP_ZMAX
   #define ENDSTOPPULLUP_XMIN
   #define ENDSTOPPULLUP_YMIN
-  //#define ENDSTOPPULLUP_ZMIN
+  #define ENDSTOPPULLUP_ZMIN
 #endif
 
 #ifdef ENDSTOPPULLUPS
@@ -426,43 +372,62 @@ const bool Z_ENDSTOPS_INVERTING = true; // set to true to invert the logic of th
 #define max_software_endstops true  // If true, axis won't move to coordinates greater than the defined lengths below.
 // Travel limits after homing
 
-#ifdef OVERLORD_PRO
-#define X_MAX_POS (85)
-#define X_MIN_POS (-85)
-#define Y_MAX_POS (85)
-#define Y_MIN_POS (-85)
-#define Y_MIN_POS_STR "-65"
-#define Z_MAX_POS (260)
-#define Z_MIN_POS (0)
-#else
-#define X_MAX_POS (75)
-#define X_MIN_POS (-75)
-#define Y_MAX_POS (75)
-#define Y_MIN_POS (-75)
-#define Y_MIN_POS_STR "-65"
-#define Z_MAX_POS (160)
-#define Z_MIN_POS (0)
-#endif
+#define Y_MIN_POS_STR "-60"
 
-#define X_MAX_LENGTH (X_MAX_POS - X_MIN_POS)
-#define Y_MAX_LENGTH (Y_MAX_POS - Y_MIN_POS)
-#define Z_MAX_LENGTH (Z_MAX_POS - Z_MIN_POS)
+//////////////////////////////////
+#define X_MAX_POS_GATE (63)
+#define X_MIN_POS_GATE (-63)
+#define Y_MAX_POS_GATE (63)
+#define Y_MIN_POS_GATE (-63)
+#define Z_MAX_POS_GATE (260)
+#define Z_MIN_POS_GATE (-20)
+
+#define X_MAX_LENGTH_GATE (X_MAX_POS_GATE - X_MIN_POS_GATE)
+#define Y_MAX_LENGTH_GATE (Y_MAX_POS_GATE - Y_MIN_POS_GATE)
+#define Z_MAX_LENGTH_GATE (Z_MAX_POS_GATE - Z_MIN_POS_GATE)
+
+#define X_HOME_POS_GATE 0
+#define Y_HOME_POS_GATE 0
+#define Z_HOME_POS_GATE 287
+//////////////////////////////////
+
+#define X_MAX_POS_PRO (85)
+#define X_MIN_POS_PRO (-85)
+#define Y_MAX_POS_PRO (85)
+#define Y_MIN_POS_PRO (-85)
+#define Z_MAX_POS_PRO (260)
+#define Z_MIN_POS_PRO (-20)
+
+#define X_MAX_LENGTH_PRO (X_MAX_POS_PRO - X_MIN_POS_PRO)
+#define Y_MAX_LENGTH_PRO (Y_MAX_POS_PRO - Y_MIN_POS_PRO)
+#define Z_MAX_LENGTH_PRO (Z_MAX_POS_PRO - Z_MIN_POS_PRO)
+
+#define X_HOME_POS_PRO 0
+#define Y_HOME_POS_PRO 0
+#define Z_HOME_POS_PRO 280
+
+//////////////////////////////////
+#define X_MAX_POS_MINI (75)
+#define X_MIN_POS_MINI (-75)
+#define Y_MAX_POS_MINI (75)
+#define Y_MIN_POS_MINI (-75)
+#define Z_MAX_POS_MINI (160)
+#define Z_MIN_POS_MINI (-20)
+
+#define X_MAX_LENGTH_MINI (X_MAX_POS_MINI - X_MIN_POS_MINI)
+#define Y_MAX_LENGTH_MINI (Y_MAX_POS_MINI - Y_MIN_POS_MINI)
+#define Z_MAX_LENGTH_MINI (Z_MAX_POS_MINI - Z_MIN_POS_MINI)
+
+#define X_HOME_POS_MINI 0
+#define Y_HOME_POS_MINI 0
+#define Z_HOME_POS_MINI 178
+
+//#define Z_HOME_POS_MINI 182 //for test only
+
 
 // The position of the homing switches
 #define MANUAL_HOME_POSITIONS       // If defined, MANUAL_*_HOME_POS below will be used
 //#define BED_CENTER_AT_0_0  // If defined, the center of the bed is at (X=0, Y=0)
-
-//Manual homing switch locations:
-// For deltabots this means top and center of the cartesian print volume.
-#define MANUAL_X_HOME_POS 0
-#define MANUAL_Y_HOME_POS 0
-
-#ifdef OVERLORD_PRO
-#define MANUAL_Z_HOME_POS 275
-#else
-#define MANUAL_Z_HOME_POS 175 // For delta: Distance between nozzle and print surface after homing.
-#endif
-
 
 //// MOVEMENT SETTINGS
 #define NUM_AXIS 4 // The axis order in all axis related arrays is X, Y, Z, E
@@ -690,13 +655,13 @@ const bool Z_ENDSTOPS_INVERTING = true; // set to true to invert the logic of th
 // Configuration of behaviors at the start and end of prints
 #define END_OF_PRINT_RETRACTION 20		// number of mm to retract when printer goes idle
 #define END_OF_PRINT_RECOVERY_SPEED 5 	// speed to recover that assumed retraction at (mm/s)
-#define PRIMING_MM3	20					// number of mm^3 of plastic to extrude when priming
-#define PRIMING_MM3_STRING "20"
-										// (Ultimaker 2 hot end capacity is approx 80 mm^3)
-#define PRIMING_MM3_PER_SEC 5			// Rate at which to prime head (in mm^3/s)
-										// (Ultimaker 2 upper limit is 8-10)
-#define PRIMING_HEIGHT 50				// Height at which to perform the priming extrusions
-#define PRIMING_HEIGHT_STRING "50"
+#define PRIMING_MM3     3                                      // number of mm^3 of plastic to extrude when priming
+#define PRIMING_MM3_STRING "3"
+// (Ultimaker 2 hot end capacity is approx 80 mm^3)
+#define PRIMING_MM3_PER_SEC 15                   // Rate at which to prime head (in mm^3/s)
+// (Ultimaker 2 upper limit is 8-10)
+#define PRIMING_HEIGHT 1                               // Height at which to perform the priming extrusions
+#define PRIMING_HEIGHT_STRING "1"
 
 // Bed leveling wizard configuration
 #define LEVELING_OFFSET 0.1				// Assumed thickness of feeler gauge/paper used in leveling (mm)

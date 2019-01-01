@@ -41,7 +41,8 @@ void _EEPROM_readData(int &pos, uint8_t* value, uint16_t size)
 // the default values are used whenever there is a change to the data, to prevent
 // wrong data being written to the variables.
 // ALSO:  always make sure the variables in the Store and retrieve sections are in the same order.
-#define EEPROM_VERSION "V15"
+#define EEPROM_VERSION "V20"
+
 
 #ifdef EEPROM_SETTINGS
 void Config_StoreSettings()
@@ -289,12 +290,13 @@ void Config_RetrieveSettings()
         fittingBedUpdateK();
         SERIAL_ECHO_START;
         SERIAL_ECHOLNPGM("Stored settings retrieved");
-        SERIAL_DEBUGPGM("Size of the setting in eeprom:");
-        SERIAL_DEBUGLN(i);
+//        SERIAL_DEBUGPGM("Size of the setting in eeprom:");
+//        SERIAL_DEBUGLN(i);
 
     }
     else
     {
+    eeprom_write_byte((uint8_t*)EEPROM_FIRST_RUN_DONE_OFFSET, 0);
         Config_ResetDefault();
         Config_StoreSettings();
         SERIAL_ECHO_START;
@@ -306,6 +308,8 @@ void Config_RetrieveSettings()
 
 void Config_ResetDefault()
 {
+  eeprom_write_byte((uint8_t*)EEPROM_FIRST_RUN_DONE_OFFSET, 0);
+
     float tmp1[]=DEFAULT_AXIS_STEPS_PER_UNIT;
     float tmp2[]=DEFAULT_MAX_FEEDRATE;
     long tmp3[]=DEFAULT_MAX_ACCELERATION;
@@ -337,9 +341,17 @@ void Config_ResetDefault()
     absPreheatFanSpeed = ABS_PREHEAT_FAN_SPEED;
 #endif
 #ifdef PIDTEMP
+
+  if (Device_isNewHeater) {
+    Kp = DEFAULT_NEW_HEATER_Kp;
+    Ki = scalePID_i(DEFAULT_NEW_HEATER_Ki);
+    Kd = scalePID_d(DEFAULT_NEW_HEATER_Kd);
+  }
+  else{
     Kp = DEFAULT_Kp;
     Ki = scalePID_i(DEFAULT_Ki);
     Kd = scalePID_d(DEFAULT_Kd);
+  }
     
     // call updatePID (similar to when we have processed M301)
     updatePID();
@@ -368,8 +380,12 @@ void Config_ResetDefault()
     fittingBedResetBackUp();
     fittingBedUpdateK();
     fittingBedOffsetInit();
+  if (Device_isLevelSensor) {
+    touchPlateOffset=TouchPlateOffsetSensor;
+  }
+  else{
     touchPlateOffset=TouchPlateOffset;
-  
+  }
 #endif
   
 #ifdef FilamentDetection

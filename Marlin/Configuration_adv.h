@@ -25,9 +25,9 @@
 #define CooldownNoWait true
 
 #ifdef PIDTEMP
-  // this adds an experimental additional term to the heatingpower, proportional to the extrusion speed.
-  // if Kc is choosen well, the additional required power due to increased melting should be compensated.
-  #define PID_ADD_EXTRUSION_RATE
+// this adds an experimental additional term to the heatingpower, proportional to the extrusion speed.
+// if Kc is choosen well, the additional required power due to increased melting should be compensated.
+//  #define PID_ADD_EXTRUSION_RATE
   #ifdef PID_ADD_EXTRUSION_RATE
     #define  DEFAULT_Kc (1) //heatingpower=Kc*(e_speed)
   #endif
@@ -94,9 +94,7 @@
 //// AUTOSET LOCATIONS OF LIMIT SWITCHES
 //// Added by ZetaPhoenix 09-15-2012
 #ifdef MANUAL_HOME_POSITIONS  // Use manual limit switch locations
-  #define X_HOME_POS MANUAL_X_HOME_POS
-  #define Y_HOME_POS MANUAL_Y_HOME_POS
-  #define Z_HOME_POS MANUAL_Z_HOME_POS
+
 #else //Set min/max homing switch positions based upon homing direction and min/max travel limits
   //X axis
   #if X_HOME_DIR == -1

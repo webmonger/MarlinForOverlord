@@ -50,10 +50,8 @@ int target_temperature_bed = 0;
 int current_temperature_raw[EXTRUDERS] = { 0 };
 float current_temperature[EXTRUDERS] = { 0.0 };
 
-#if TEMP_SENSOR_BED != 0
 int current_temperature_bed_raw = 0;
 float current_temperature_bed = 0.0;
-#endif
 #ifdef TEMP_SENSOR_1_AS_REDUNDANT
   int redundant_temperature_raw = 0;
   float redundant_temperature = 0.0;
@@ -79,10 +77,11 @@ float current_temperature_bed = 0.0;
 
 #endif
 
-#ifdef VotageDetection
-  uint16_t votageDetection=0;
-#endif
-  
+uint16_t votageDetection=0;
+
+
+uint8_t temp_error_handle = 0;
+
 //===========================================================================
 //=============================private variables============================
 //===========================================================================
@@ -214,12 +213,13 @@ void PID_autotune(float temp, int extruder, int ncycles)
 
     if(temp_meas_ready == true) { // temp sample ready
       updateTemperaturesFromRawValues();
+      if (Device_isBedHeat) {
 
-#if TEMP_SENSOR_BED != 0
       input = (extruder<0)?current_temperature_bed:current_temperature[extruder];
-#else
-      input = current_temperature[extruder];
-#endif
+      }
+      else{
+        input = current_temperature[extruder];
+      }
 
       max=max(max,input);
       min=min(min,input);
@@ -415,52 +415,6 @@ void checkExtruderAutoFans()
 
 void manage_heater()
 {
-  char blebuffer[32];
-  
-  if (isBLEUpdate && millis()-isBLEUpdateTimer>50) {
-    switch (isBLEUpdate) {
-      case 8:
-        sprintf_P(blebuffer, PSTR("M770 S%i\r\n"),int(degHotend(active_extruder)));
-        SERIAL_BLE_PROTOCOL(blebuffer);
-        isBLEUpdate=7;
-        isBLEUpdateTimer=millis();
-        break;
-      case 7:
-#if TEMP_SENSOR_BED != 0
-        sprintf_P(blebuffer, PSTR("M771 S%i\r\n"),int(degBed()));
-        SERIAL_BLE_PROTOCOL(blebuffer);
-#endif
-        isBLEUpdateTimer=millis();
-        isBLEUpdate=6;
-        break;
-      case 6:
-        sprintf_P(blebuffer, PSTR("M775 P%i\r\n"),int(feedmultiply));
-        SERIAL_BLE_PROTOCOL(blebuffer);
-        isBLEUpdateTimer=millis();
-        isBLEUpdate=5;
-        break;
-      case 5:
-        sprintf_P(blebuffer, PSTR("M776 P%i\r\n"),int(extrudemultiply[active_extruder]));
-        SERIAL_BLE_PROTOCOL(blebuffer);
-        isBLEUpdateTimer=millis();
-        isBLEUpdate=4;
-        break;
-      case 4:
-        sprintf_P(blebuffer, PSTR("M777 P%i\r\n"),int(fanSpeed*100/255.0));
-        SERIAL_BLE_PROTOCOL(blebuffer);
-        isBLEUpdateTimer=millis();
-        if (card.sdprinting) {
-          isBLEUpdate=3;
-        }
-        else{
-          isBLEUpdate=0;
-        }
-        break;
-      default:
-        break;
-    }
-  }
-  
   float pid_input;
   float pid_output;
 
@@ -480,7 +434,7 @@ void manage_heater()
   
   switch (powerOnDemandState) {
     case PowerOnDemandSleeping:
-      if (target_temperature[0]>0.0 || target_temperature_bed>0.0 || movesplanned()) {
+    if (target_temperature[0]>0.0 || target_temperature_bed>0.0 || movesplanned() || fanSpeed > 0) {
           powerOnDemandState=PowerOnDemandStarting;
           powerOnDemandTimer=millis();
           newPowerWakeUp();
@@ -497,6 +451,11 @@ void manage_heater()
       soft_pwm_bed=0;
       soft_pwm_fan=0;
       st_sleep();
+    if (Device_isPowerSaving && powerOnDemandState == PowerOnDemandSleeping && millis() - powerOnDemandEnergyTimer >=60000UL) {
+      sleepAll();
+      powerOnDemandEnergyTimer = millis();
+    }
+
       return;
     case PowerOnDemandStarting:
       if (millis()-powerOnDemandTimer>2000) {
@@ -511,7 +470,7 @@ void manage_heater()
       }
       break;
     case PowerOnDemandWorking:
-      if (card.sdprinting==false && target_temperature[0]==0.0 && target_temperature_bed==0.0 && movesplanned()==0) {
+    if (card.sdprinting==false && target_temperature[0]==0.0 && target_temperature_bed==0.0 && movesplanned()==0 && fanSpeed == 0) {
         powerOnDemandState=PowerOnDemandStopping;
         powerOnDemandTimer=millis();
       }
@@ -520,6 +479,7 @@ void manage_heater()
     case PowerOnDemandStopping:
       if (millis()-powerOnDemandTimer>60000UL) {
         powerOnDemandState=PowerOnDemandSleeping;
+      powerOnDemandEnergyTimer = millis();
         disable_x();
         disable_y();
         disable_z();
@@ -529,23 +489,23 @@ void manage_heater()
         soft_pwm[0]=0;
         soft_pwm_bed=0;
         soft_pwm_fan=0;
+      target_temperature_bed=0.0;
         st_sleep();
         newPowerSleep();
         return;
       }
       else{
-        if (card.sdprinting || target_temperature[0]>0.0 || target_temperature_bed>0.0 || movesplanned()) {
+      if (card.sdprinting || target_temperature[0]>0.0 || target_temperature_bed>0.0 || movesplanned() || fanSpeed > 0) {
           powerOnDemandState=PowerOnDemandWorking;
         }
       }
       break;
       
     case PowerOnDemandOutOfPower:
-      if (millis()-powerOnDemandTimer>500) {
+    if (millis()-powerOnDemandTimer>2000) {
         switch (powerOnDemandStateBackUp) {
           case PowerOnDemandStopping:
           case PowerOnDemandWorking:
-//            doPausePrint();
             abortPrint();
             fanSpeed=0;
             break;
@@ -557,7 +517,6 @@ void manage_heater()
             quickStop();
             discardEnqueueingCommand();
             discardCommandInBuffer();
-            isUltiGcode=true;
             feedmultiply=100;
             disable_x();
             disable_y();
@@ -608,7 +567,8 @@ void manage_heater()
             currentMenu = lcd_menu_main;
               
           }else{
-            currentMenu = lcd_menu_first_run_init;
+          languageType= LANGUAGE_CHINESE;
+          currentMenu = lcd_menu_first_run_language;
           }
             LED_NORMAL();
           lcd_lib_encoder_pos=0;
@@ -714,20 +674,20 @@ void manage_heater()
             watchmillis[e] = 0;
         }
     }
-    #endif
-    #ifdef TEMP_SENSOR_1_AS_REDUNDANT
-      if(fabs(current_temperature[0] - redundant_temperature) > MAX_REDUNDANT_TEMP_SENSOR_DIFF) {
-        disable_heater();
-        if(IsStopped() == false) {
-          SERIAL_ERROR_START;
-          SERIAL_ERRORLNPGM("Extruder switched off. Temperature difference between temp sensors is too high !");
-          LCD_ALERTMESSAGEPGM("Err: REDUNDANT TEMP ERROR");
-        }
-        #ifndef BOGUS_TEMPERATURE_FAILSAFE_OVERRIDE
-          Stop(STOP_REASON_REDUNDANT_TEMP);
-        #endif
-      }
-    #endif
+#endif
+#ifdef TEMP_SENSOR_1_AS_REDUNDANT
+    //      if(fabs(current_temperature[0] - redundant_temperature) > MAX_REDUNDANT_TEMP_SENSOR_DIFF) {
+    //        disable_heater();
+    //        if(IsStopped() == false) {
+    //          SERIAL_ERROR_START;
+    //          SERIAL_ERRORLNPGM("Extruder switched off. Temperature difference between temp sensors is too high !");
+    //          LCD_ALERTMESSAGEPGM("Err: REDUNDANT TEMP ERROR");
+    //        }
+    //        #ifndef BOGUS_TEMPERATURE_FAILSAFE_OVERRIDE
+    //          Stop(STOP_REASON_REDUNDANT_TEMP);
+    //        #endif
+    //      }
+#endif
     if (pid_output == PID_MAX)
     {
         if (current_temperature[e] - max_heating_start_temperature[e] > MAX_HEATING_TEMPERATURE_INCREASE)
@@ -785,8 +745,7 @@ void manage_heater()
   previous_millis_bed_heater = millis();
   #endif
 
-  #if TEMP_SENSOR_BED != 0
-
+  if(Device_isBedHeat) {
   #ifdef PIDTEMPBED
     pid_input = current_temperature_bed;
 
@@ -853,7 +812,7 @@ void manage_heater()
         WRITE(HEATER_BED_PIN,LOW);
       }
     #endif
-  #endif
+  }
 }
 
 #define PGM_RD_W(x)   (short)pgm_read_word(&x)
@@ -942,9 +901,9 @@ static void updateTemperaturesFromRawValues()
     {
         current_temperature[e] = analog2temp(current_temperature_raw[e], e);
     }
-#if TEMP_SENSOR_BED != 0
+  if (Device_isBedHeat) {
     current_temperature_bed = analog2tempBed(current_temperature_bed_raw);
-#endif
+  }
     #ifdef TEMP_SENSOR_1_AS_REDUNDANT
       redundant_temperature = analog2temp(redundant_temperature_raw, 1);
     #endif
@@ -1322,10 +1281,10 @@ ISR(TIMER0_COMPB_vect)
   static unsigned char soft_pwm_b;
   #endif
   
-  #ifdef VotageDetection
   static unsigned long votageDetectionValue=0;
-  #endif
   
+  static uint8_t soft_bed_half = 0;
+
   if(pwm_count == 0){
     soft_pwm_0 = soft_pwm[0];
     if(soft_pwm_0 > 0) WRITE(HEATER_0_PIN,1);
@@ -1367,6 +1326,14 @@ ISR(TIMER0_COMPB_vect)
     }
 #endif
   }
+  else if(Device_isNewHeater) {
+#if defined(HEATER_BED_PIN) && HEATER_BED_PIN > -1
+    if (soft_pwm_bed) {
+      soft_bed_half = !soft_bed_half;
+      WRITE(HEATER_BED_PIN,soft_bed_half);
+    }
+#endif
+  }
   #if EXTRUDERS > 1
   if(soft_pwm_1 <= pwm_count) WRITE(HEATER_1_PIN,0);
   #endif
@@ -1385,11 +1352,9 @@ ISR(TIMER0_COMPB_vect)
   
   switch(temp_state) {
     case 0: // Prepare TEMP_0
-      #ifdef PushButton
       if ( (temp_count&0x04) == 0x00) {
         lcd_buttons_update();
       }
-      #endif
       
       #if defined(TEMP_0_PIN) && (TEMP_0_PIN > -1)
         #if TEMP_0_PIN > 7
@@ -1399,9 +1364,6 @@ ISR(TIMER0_COMPB_vect)
         #endif
         ADMUX = ((1 << REFS0) | (TEMP_0_PIN & 0x07));
         ADCSRA |= 1<<ADSC; // Start conversion
-      #endif
-      #ifndef PushButton
-      lcd_buttons_update();
       #endif
       temp_state = 1;
       break;
@@ -1424,9 +1386,6 @@ ISR(TIMER0_COMPB_vect)
         ADMUX = ((1 << REFS0) | (TEMP_BED_PIN & 0x07));
         ADCSRA |= 1<<ADSC; // Start conversion
       #endif
-      #ifndef PushButton
-      lcd_buttons_update();
-      #endif
       temp_state = 3;
       break;
     case 3: // Measure TEMP_BED
@@ -1445,9 +1404,6 @@ ISR(TIMER0_COMPB_vect)
         ADMUX = ((1 << REFS0) | (TEMP_1_PIN & 0x07));
         ADCSRA |= 1<<ADSC; // Start conversion
       #endif
-      #ifndef PushButton
-      lcd_buttons_update();
-      #endif
       temp_state = 5;
       break;
     case 5: // Measure TEMP_1
@@ -1456,28 +1412,6 @@ ISR(TIMER0_COMPB_vect)
       #endif
       temp_state = 6;
       break;
-//    case 6: // Prepare TEMP_2
-//      #if defined(TEMP_2_PIN) && (TEMP_2_PIN > -1) && EXTRUDERS > 2
-//        #if TEMP_2_PIN > 7
-//          ADCSRB = 1<<MUX5;
-//        #else
-//          ADCSRB = 0;
-//        #endif
-//        ADMUX = ((1 << REFS0) | (TEMP_2_PIN & 0x07));
-//        ADCSRA |= 1<<ADSC; // Start conversion
-//      #endif
-//      #ifndef PushButton
-//      lcd_buttons_update();
-//      #endif
-//      temp_state = 7;
-//      break;
-//    case 7: // Measure TEMP_2
-//      #if defined(TEMP_2_PIN) && (TEMP_2_PIN > -1) && EXTRUDERS > 2
-//        raw_temp_2_value += ADC;
-//      #endif
-//      temp_state = 0;
-//      temp_count++;
-//      break;
       case 6: // Prepare TEMP_2
 #if defined(VotageDetectionPin) && (VotageDetectionPin > -1)
 #if VotageDetectionPin > 7
@@ -1487,9 +1421,6 @@ ISR(TIMER0_COMPB_vect)
 #endif
           ADMUX = ((1 << REFS0) | (VotageDetectionPin & 0x07));
           ADCSRA |= 1<<ADSC; // Start conversion
-#endif
-#ifndef PushButton
-          lcd_buttons_update();
 #endif
           temp_state = 7;
           break;
@@ -1523,10 +1454,10 @@ ISR(TIMER0_COMPB_vect)
 #if EXTRUDERS > 2
       current_temperature_raw[2] = raw_temp_2_value;
 #endif
-#if TEMP_SENSOR_BED != 0
-      current_temperature_bed_raw = raw_temp_bed_value;
-#endif
-      
+      if (Device_isBedHeat) {
+        current_temperature_bed_raw = raw_temp_bed_value;
+      }
+
 #if defined(VotageDetectionPin) && (VotageDetectionPin > -1)
       votageDetection = votageDetectionValue;
 #endif
@@ -1540,13 +1471,17 @@ ISR(TIMER0_COMPB_vect)
     raw_temp_bed_value = 0;
     votageDetectionValue= 0;
 
+    temp_error_handle = 0;
+
 #if HEATER_0_RAW_LO_TEMP > HEATER_0_RAW_HI_TEMP
     if(current_temperature_raw[0] <= maxttemp_raw[0])
 #else
     if(current_temperature_raw[0] >= maxttemp_raw[0])
 #endif
     {
-        max_temp_error(0);
+      temp_error_handle |= 0x01;
+      current_temperature_raw[0] = redundant_temperature_raw;
+      //        max_temp_error(0);
     }
 #if HEATER_0_RAW_LO_TEMP > HEATER_0_RAW_HI_TEMP
     if(current_temperature_raw[0] >= minttemp_raw[0])
@@ -1554,7 +1489,9 @@ ISR(TIMER0_COMPB_vect)
     if(current_temperature_raw[0] <= minttemp_raw[0])
 #endif
     {
-        min_temp_error(0);
+      temp_error_handle |= 0x02;
+      current_temperature_raw[0] = redundant_temperature_raw;
+      //        min_temp_error(0);
     }
     
 #ifdef TEMP_SENSOR_1_AS_REDUNDANT
@@ -1564,7 +1501,9 @@ ISR(TIMER0_COMPB_vect)
       if(redundant_temperature_raw >= maxttemp_raw[0])
 #endif
       {
-        max_temp_error(0);
+      temp_error_handle |= 0x04;
+      redundant_temperature_raw = current_temperature_raw[0];
+      //        max_temp_error(0);
       }
 #if HEATER_0_RAW_LO_TEMP > HEATER_0_RAW_HI_TEMP
     if(redundant_temperature_raw >= minttemp_raw[0])
@@ -1572,11 +1511,33 @@ ISR(TIMER0_COMPB_vect)
       if(redundant_temperature_raw <= minttemp_raw[0])
 #endif
       {
-        min_temp_error(0);
+      temp_error_handle |= 0x08;
+      redundant_temperature_raw = current_temperature_raw[0];
+      //        min_temp_error(0);
       }
 #endif
-    
-    
+
+    if (temp_error_handle) {
+      if ((temp_error_handle & 0x03)&&(temp_error_handle & 0x0C)) {
+        if (temp_error_handle & 0x01) {
+          max_temp_error(0);
+        }
+        else if (temp_error_handle & 0x02) {
+          min_temp_error(0);
+        }
+        else if (temp_error_handle & 0x04) {
+          max_temp_error(0);
+        }
+        else if (temp_error_handle & 0x08) {
+          min_temp_error(0);
+        }
+        else{
+          //Should not come here.
+          max_temp_error(0);
+        }
+      }
+    }
+
 #if (EXTRUDERS > 1 )
 #if HEATER_1_RAW_LO_TEMP > HEATER_1_RAW_HI_TEMP
     if(current_temperature_raw[1] <= maxttemp_raw[1])
@@ -1615,7 +1576,8 @@ ISR(TIMER0_COMPB_vect)
 #endif
   
   /* No bed MINTEMP error? */
-#if defined(BED_MAXTEMP) && (TEMP_SENSOR_BED != 0)
+#if defined(BED_MAXTEMP)
+    if (Device_isBedHeat) {
 # if HEATER_BED_RAW_LO_TEMP > HEATER_BED_RAW_HI_TEMP
     if(current_temperature_bed_raw <= bed_maxttemp_raw)
 #else
@@ -1624,6 +1586,7 @@ ISR(TIMER0_COMPB_vect)
     {
        target_temperature_bed = 0;
        bed_max_temp_error();
+    }
     }
 #endif
   }

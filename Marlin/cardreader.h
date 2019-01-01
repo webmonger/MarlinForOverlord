@@ -16,13 +16,16 @@
 # define IS_SD_INSERTED true
 #endif
 
-#include "UltiLCD2_menu_print.h"
-#include "SdFile.h"
+  #include "UltiLCD2_menu_print.h"
+  #include "SdFile.h"
+#include "Marlin.h"
 enum LsAction {LS_SerialPrint,LS_Count,LS_GetFilename};
 class CardReader
 {
 public:
   CardReader();
+
+  char* getFullPath();
 
   void initsd();
   void write_command(char *buf);
@@ -52,7 +55,7 @@ public:
 
 
   FORCE_INLINE bool isFileOpen() { return file.isOpen(); }
-  FORCE_INLINE bool eof() { return sdpos>=filesize ;};
+  FORCE_INLINE bool eof() { return file.curPosition()>=filesize;};
   FORCE_INLINE int16_t get() {  sdpos = file.curPosition();return (int16_t)file.read();};
   FORCE_INLINE int16_t fgets(char* str, int16_t num) { sdpos = file.curPosition(); return file.fgets(str, num); }
   FORCE_INLINE void setIndex(long index) {sdpos = index;file.seekSet(index);};
@@ -84,7 +87,7 @@ public:
     }else{
       insertChangeDelay = 5;
     }
-    if (sdInserted && !isOk()) {
+    if (sdInserted && !isOk() && (!isWindowsSD || !Device_isWifi)) {
       initsd();
     }
   }

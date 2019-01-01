@@ -36,16 +36,14 @@ void manage_heater(); //it is critical that this is called periodically.
 extern int target_temperature[EXTRUDERS];
 extern float current_temperature[EXTRUDERS];
 extern int target_temperature_bed;
-#if TEMP_SENSOR_BED != 0
 extern float current_temperature_bed;
-#endif
 #ifdef TEMP_SENSOR_1_AS_REDUNDANT
   extern float redundant_temperature;
 #endif
 
-#ifdef VotageDetection
+extern uint8_t temp_error_handle;
+
 extern uint16_t votageDetection;
-#endif
 
 #ifdef PIDTEMP
   extern float Kp,Ki,Kd,Kc;
@@ -67,11 +65,9 @@ FORCE_INLINE float degHotend(uint8_t extruder) {
   return current_temperature[extruder];
 };
 
-#if TEMP_SENSOR_BED != 0
 FORCE_INLINE float degBed() {
   return current_temperature_bed;
 };
-#endif
 
 FORCE_INLINE float degTargetHotend(uint8_t extruder) {
   return target_temperature[extruder];
@@ -93,22 +89,17 @@ FORCE_INLINE bool isHeatingHotend(uint8_t extruder){
   return target_temperature[extruder] > current_temperature[extruder];
 };
 
-#if TEMP_SENSOR_BED != 0
 FORCE_INLINE bool isHeatingBed() {
   return target_temperature_bed > current_temperature_bed;
 };
-#endif
 
 FORCE_INLINE bool isCoolingHotend(uint8_t extruder) {
   return target_temperature[extruder] < current_temperature[extruder];
 };
 
-#if TEMP_SENSOR_BED != 0
 FORCE_INLINE bool isCoolingBed() {
   return target_temperature_bed < current_temperature_bed;
 };
-#endif
-
 
 #define degHotend0() degHotend(0)
 #define degTargetHotend0() degTargetHotend(0)
