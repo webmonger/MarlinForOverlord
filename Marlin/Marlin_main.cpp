@@ -353,7 +353,7 @@ void serial_echopair_P(const char *s_P, unsigned long v)
 { serialprintPGM(s_P); SERIAL_ECHO(v); }
 
 extern "C"{
-  extern unsigned int __bss_end;
+  extern int __bss_end;
   extern unsigned int __heap_start;
   extern void *__brkval;
   

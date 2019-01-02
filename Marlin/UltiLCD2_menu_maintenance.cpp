@@ -286,7 +286,7 @@ static void doMaintenanceLevel()
     SERIAL_DEBUGLN(add_homeing[Z_AXIS]);
   
     enquecommand_P(PSTR("G28"));
-    enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y"Y_MIN_POS_STR" Z" PRIMING_HEIGHT_STRING));
+    enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y" Y_MIN_POS_STR " Z" PRIMING_HEIGHT_STRING));
     
     for(uint8_t e = 0; e<EXTRUDERS; e++)
     {
@@ -309,8 +309,8 @@ static void doMaintenanceLevel()
                 
                 bufferPtr=int_to_string(END_OF_PRINT_RECOVERY_SPEED*60, bufferPtr);
                 
-                strcpy_P(bufferPtr, PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
-                bufferPtr+=strlen_P(PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
+                strcpy_P(bufferPtr, PSTR(" E-" PRIMING_MM3_STRING"\nG1 F"));
+                bufferPtr+=strlen_P(PSTR(" E-" PRIMING_MM3_STRING"\nG1 F"));
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
@@ -325,8 +325,8 @@ static void doMaintenanceLevel()
                 //Todo
             }
             else{
-                strcpy_P(bufferPtr, PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
-                bufferPtr+=strlen_P(PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
+                strcpy_P(bufferPtr, PSTR("G92 E-" PRIMING_MM3_STRING"\nG1 F"));
+                bufferPtr+=strlen_P(PSTR("G92 E-" PRIMING_MM3_STRING"\nG1 F"));
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
@@ -337,7 +337,7 @@ static void doMaintenanceLevel()
         enquecommand(buffer);
     }
     
-    enquecommand_P(PSTR("G1 X"CIRCLE_RADIUS_STRING" Y0 Z0.3 F3000"));
+    enquecommand_P(PSTR("G1 X" CIRCLE_RADIUS_STRING " Y0 Z0.3 F3000"));
 }
 
 static void doCancelHeatManualLevel()

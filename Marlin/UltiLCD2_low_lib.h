@@ -55,4 +55,12 @@ char* int_to_string(int i, char* temp_buffer, const char* p_postfix = NULL);
 char* int_to_time_string(unsigned long i, char* temp_buffer);
 char* float_to_string(float f, char* temp_buffer, const char* p_postfix = NULL);
 
+#define CHINESE_POINT "\xB6" "\x84"
+#define CHINESE_DOWN  "\xB7" "\x84"
+#define CHINESE_UP    "\xB8" "\x84"
+
+#define ENGLISH_POINT "\x1C"
+#define ENGLISH_UP    "\x1E"
+#define ENGLISH_DOWN  "\x1F"
+
 #endif//ULTI_LCD2_LOW_LIB_H
