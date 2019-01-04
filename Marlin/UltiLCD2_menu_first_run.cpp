@@ -32,7 +32,6 @@ static void lcd_menu_first_run_heat_for_level();
 static void doCancelAutoLevel();
 static void skipAll();
 void lcd_menu_first_run_temperature_error();
-static unsigned long waitTimer;
 
 
 #define DRAW_PROGRESS_NR(nr) do { lcd_lib_draw_stringP((nr < 10) ? 100 : 94, 0, PSTR( #nr "/11")); } while(0)
@@ -105,7 +104,7 @@ static void skipAll()
 
 static void doHeatWait()
 {
-  waitTimer = millis();
+  menuTimer = millis();
 }
 
 
@@ -193,7 +192,7 @@ static void lcd_menu_first_run_heat_for_level()
   int16_t temp = degHotend(0) - 20;
   int16_t target = degTargetHotend(0) - 10 - 20;
   if (temp < 0) temp = 0;
-  if (temp > target && millis()-waitTimer>800) {
+  if (temp > target && millis()-menuTimer>800) {
     setTargetHotend(0, 0);
     setTargetBed(0);
     enquecommand_P(PSTR("G29"));
@@ -272,6 +271,7 @@ static void lcd_menu_first_run_waiting_auto_level()
 
 static void doMaterialReset()
 {
+  menuTimer = millis();
   lcd_material_reset_defaults();
   for(uint8_t e=0; e<EXTRUDERS; e++)
     lcd_material_set_material(0, e);
@@ -311,14 +311,14 @@ static void lcd_menu_first_run_material_load_heatup()
   int16_t temp = degHotend(0) - 20;
   int16_t target = degTargetHotend(0) - 10 - 20;
   if (temp < 0) temp = 0;
-  if (temp > target)
+  if (temp > target && millis()-menuTimer>800)
   {
     for(uint8_t e=0; e<EXTRUDERS; e++)
       volume_to_filament_length[e] = 1.0;//Set the extrusion to 1mm per given value, so we can move the filament a set distance.
     
     plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS],current_position[E_AXIS]);
     currentMenu = lcd_menu_first_run_material_load_insert;
-    waitTimer = millis();
+    menuTimer = millis();
     temp = target;
   }
   
@@ -388,7 +388,7 @@ static void lcd_menu_first_run_material_load_insert()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_INSERT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_INSERT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_INSERT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -408,7 +408,7 @@ static void lcd_menu_first_run_material_load_insert()
     lcd_info_screen(NULL, NULL, LS(PSTR("WAITING"),
                                    PSTR("\xB3" "\x80"  "\xB4" "\x80"  ),
                                    PSTR("\x9E" "\x84"  "\xC9" "\x83"  "\xF3" "\x83"  )) ,MenuForward);
-    waitTimer = millis();
+    menuTimer = millis();
   }
 
   DRAW_PROGRESS_NR(6);
@@ -448,7 +448,7 @@ static void lcd_menu_first_run_material_load_forward()
     digipot_current(2, motor_current_setting[2]*2/3);//Set E motor power lower so the motor will skip instead of grind.
 #endif
     currentMenu = lcd_menu_first_run_material_load_wait;
-    waitTimer = millis();
+    menuTimer = millis();
     SELECT_MAIN_MENU_ITEM(0);
   }
   
@@ -488,7 +488,7 @@ static void lcd_menu_first_run_material_load_wait()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_INSERT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_INSERT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_INSERT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -505,7 +505,7 @@ static void lcd_menu_first_run_material_load_wait()
     }
   }
   else{
-    waitTimer = millis();
+    menuTimer = millis();
     lcd_info_screen(NULL, NULL, LS(PSTR("WAITING"),
                                    PSTR("\xB3" "\x80"  "\xB4" "\x80"  "\xC1" "\x80"  ),
                                    PSTR("\x9E" "\x84"  "\xC9" "\x83"  "\xF3" "\x83"  )) , MenuForward);

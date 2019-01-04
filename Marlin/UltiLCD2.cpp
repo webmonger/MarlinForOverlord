@@ -26,7 +26,6 @@ uint8_t led_mode = LED_MODE_ALWAYS_ON;
 
 static void lcd_menu_startup();
 
-uint8_t waitTimer;
 void lcd_menu_wait();
 
 void lcd_init()
@@ -40,7 +39,7 @@ void lcd_init()
     }
     lcd_material_read_current_material();
     if (Device_isWifi) {
-      waitTimer = 100;
+      menuTimer = 100;
       currentMenu = lcd_menu_wait;
     }
     currentMenu = lcd_menu_startup;
@@ -185,12 +184,12 @@ void lcd_menu_wait()
   LED_OFF();
 
   if (lcd_lib_button_down) {
-    if (--waitTimer == 0) {
+    if (--menuTimer == 0) {
       lcd_change_to_menu(lcd_menu_startup,MenuForward);
     }
   }
   else{
-    waitTimer = 100;
+    menuTimer = 100;
   }
   
   lcd_info_screen(NULL, NULL, LS(PSTR("SKIP"),
@@ -248,7 +247,7 @@ void lcd_menu_startup()
         startTime=millis();
     }
     
-    allTime=millis()-startTime;
+    allTime=millis()-startTime + 1024;
     
     lcd_lib_clear();
     lcd_lib_draw_gfx(0, 22, overlordTextGfx);
@@ -257,7 +256,7 @@ void lcd_menu_startup()
     int i,j;
     
     for (j=0; j<endLine; j++) {
-        int lineStartTime = ((63-j)<<6) + 256 - allTime;
+        int lineStartTime = ((63-j)<<6) - allTime;
         
         if (lineStartTime + 127*20 < 0) {
             if (j==0) {

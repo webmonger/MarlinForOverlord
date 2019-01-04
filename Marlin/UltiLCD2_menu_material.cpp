@@ -28,8 +28,7 @@ void inline eeprom_write_float(float* addr, float f)
 }
 #endif
 
-struct materialSettings material[EXTRUDERS];
-static unsigned long waitTimer;
+struct materialSettings material[EXTRUDERS] = {0,0,0,0.0};
 
 void doCooldown();//TODO
 static void lcd_menu_material_main();
@@ -54,7 +53,8 @@ void lcd_material_clean_nozzle_heat();
 void lcd_material_clean_nozzle_heated();
 void lcd_material_clean_nozzle_cool();
 void lcd_material_clean_nozzle_cooled();
-
+void lcd_material_clean_nozzle_repeat();
+  
 
 static void lcd_menu_select_skip_remove();
 static void lcd_menu_change_material_remove_process();
@@ -63,6 +63,8 @@ bool isReload;
 
 static void finishMaterialInsert()
 {
+  enquecommand_P("M84");
+
 #if MOTOR_CURRENT_PWM_XY_PIN > -1
     digipot_current(2, motor_current_setting[2]);//Set E motor power to default.
 #endif
@@ -93,17 +95,19 @@ static void cancelMaterialInsert()
     int16_t temp = degHotend(active_extruder) - 20;
     int16_t target = degTargetHotend(active_extruder) - 20 - 10;
     if (temp < 0) temp = 0;
-    if (temp > target && !is_command_queued() && !isCommandInBuffer())
+    if (temp > target && millis()-menuTimer>800 && !is_command_queued() && !isCommandInBuffer())
     {
     if (isReload) {
       lcd_change_to_menu(lcd_menu_select_skip_remove,MAIN_MENU_ITEM_POS(0),MenuForward);
     }
     else{
+      setTargetHotend(0, active_extruder);
+      fanSpeed=255;
       lcd_menu_change_material_remove_process();
       lcd_change_to_menu(lcd_menu_change_material_remove,MAIN_MENU_ITEM_POS(0),MenuForward);
     }
     
-    waitTimer = millis();
+    menuTimer = millis();
         temp = target;
     }
 
@@ -137,7 +141,7 @@ static void lcd_menu_select_skip_remove()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_HEATING_WAIT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_HEATING_WAIT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_HEATING_WAIT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -233,7 +237,7 @@ static void lcd_menu_change_material_remove()
       else{
         currentMenu = lcd_material_clean_nozzle_check_option;
       }
-        waitTimer=millis();
+        menuTimer=millis();
         SELECT_MAIN_MENU_ITEM(0);
         //Disable the extruder motor so you can pull out the remaining filament.
         disable_e0();
@@ -258,7 +262,7 @@ static void lcd_menu_change_material_remove_wait_user_ready()
 {
     current_position[E_AXIS] = 0;
     plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-    waitTimer = millis();
+    menuTimer = millis();
 }
 
 static void lcd_menu_change_material_remove_wait_user()
@@ -272,7 +276,7 @@ static void lcd_menu_change_material_remove_wait_user()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_INSERT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_INSERT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_INSERT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -307,7 +311,7 @@ static void lcd_menu_change_material_remove_wait_user()
                         lcd_menu_maintenance, cancelMaterialInsert, LS(PSTR("CANCEL"),
                                                                        PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
                                                                        PSTR("\xFF" "\x82"  "\xC6" "\x82"  )) );
-    waitTimer = millis();
+    menuTimer = millis();
   }
 
   lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Please remove"),
@@ -358,7 +362,7 @@ static void lcd_menu_change_material_insert_wait_user()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_INSERT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_INSERT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_INSERT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -392,7 +396,7 @@ static void lcd_menu_change_material_insert_wait_user()
                         lcd_menu_maintenance, cancelMaterialInsert, LS(PSTR("CANCEL"),
                                                                        PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
                                                                        PSTR("\xFF" "\x82"  "\xC6" "\x82"  )) );
-    waitTimer = millis();
+    menuTimer = millis();
   }
 
 
@@ -484,10 +488,14 @@ static void lcd_menu_change_material_insert_forward()
 
 static void materialInsertReady()
 {
-    current_position[E_AXIS] -= 20;
-    //Only move E.
+    current_position[E_AXIS] -= END_OF_PRINT_RETRACTION;
+
     plan_buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], 25, active_extruder);
-    finishMaterialInsert();
+  
+  // no longer primed
+  clearPrimed();
+
+      finishMaterialInsert();
 }
 
 static void lcd_menu_change_material_insert()
@@ -525,7 +533,7 @@ static void lcd_menu_change_material_insert()
     char buffer[10];
     char* c = buffer;
     
-    int leftTime = FILAMENT_INSERT_TIME - (millis()-waitTimer)/1000;
+    int leftTime = FILAMENT_INSERT_TIME - (millis()-menuTimer)/1000;
     leftTime = constrain(leftTime, 0, FILAMENT_INSERT_TIME);
     
     int_to_string(leftTime, buffer);
@@ -561,7 +569,7 @@ static void lcd_menu_change_material_insert()
                         lcd_menu_maintenance, cancelMaterialInsert, LS(PSTR("CANCEL"),
                                                                        PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
                                                                        PSTR("\xFF" "\x82"  "\xC6" "\x82"  )));
-    waitTimer = millis();
+    menuTimer = millis();
   }
 
   #endif
@@ -1001,7 +1009,6 @@ static void lcd_material_settings_details_callback(uint8_t nr)
         int_to_string(material[active_extruder].flow, buffer, PSTR("%"));
     }
     lcd_draw_detail(buffer);
-//    lcd_lib_draw_string(5, 57, buffer);
 }
 
 static void lcd_menu_material_settings()
@@ -1138,14 +1145,25 @@ void lcd_material_store_material(uint8_t nr)
 
 void lcd_material_read_current_material()
 {
+  SERIAL_DEBUGLNPGM("Material:");
+  
     for(uint8_t e=0; e<EXTRUDERS; e++)
     {
         material[e].temperature = eeprom_read_word(EEPROM_MATERIAL_TEMPERATURE_OFFSET(EEPROM_MATERIAL_SETTINGS_MAX_COUNT+e));
+    SERIAL_DEBUGPGM("temperature:");
+    SERIAL_DEBUGLN(material[e].temperature);
         material[e].bed_temperature = eeprom_read_word(EEPROM_MATERIAL_BED_TEMPERATURE_OFFSET(EEPROM_MATERIAL_SETTINGS_MAX_COUNT+e));
+    SERIAL_DEBUGPGM("bed_temperature:");
+    SERIAL_DEBUGLN(material[e].bed_temperature);
         material[e].flow = eeprom_read_word(EEPROM_MATERIAL_FLOW_OFFSET(EEPROM_MATERIAL_SETTINGS_MAX_COUNT+e));
-
+    SERIAL_DEBUGPGM("flow:");
+    SERIAL_DEBUGLN(material[e].flow);
         material[e].fan_speed = eeprom_read_byte(EEPROM_MATERIAL_FAN_SPEED_OFFSET(EEPROM_MATERIAL_SETTINGS_MAX_COUNT+e));
+    SERIAL_DEBUGPGM("fan_speed:");
+    SERIAL_DEBUGLN(material[e].fan_speed);
         material[e].diameter = eeprom_read_float(EEPROM_MATERIAL_DIAMETER_OFFSET(EEPROM_MATERIAL_SETTINGS_MAX_COUNT+e));
+    SERIAL_DEBUGPGM("diameter:");
+    SERIAL_DEBUGLN(material[e].diameter);
     }
 }
 
@@ -1190,14 +1208,19 @@ bool lcd_material_verify_material_settings()
 
 
 
+int8_t cleanTimes=0;
 
 void doCancelClean(){
   setTargetHotend(0, active_extruder);
   nextEncoderPos = 2;
 }
 
+void doStartClean(){
+  cleanTimes = 0;
+}
+
 void lcd_material_clean_nozzle_option(){
-  lcd_question_screen(lcd_material_clean_nozzle_remove_option, NULL, LS(PSTR("YES"),
+  lcd_question_screen(lcd_material_clean_nozzle_remove_option, doStartClean, LS(PSTR("YES"),
                                                                     PSTR("\x8C" "\x82"  "\xDB" "\x80"  ),
                                                                     PSTR("\x91" "\x84"  "\xB6" "\x83"  )) , lcd_menu_maintenance, doCancelClean, LS(PSTR("NO"),
                                                                                                                                    PSTR("\xD8" "\x80"  "\xD9" "\x80"  ),
@@ -1216,34 +1239,37 @@ void lcd_material_clean_nozzle_option(){
 
 void doCleanPreheat(){
   setTargetHotend(220, active_extruder);
+  menuTimer = millis();
 }
 
 void lcd_material_clean_nozzle_remove_option(){
   lcd_question_screen(lcd_menu_change_material_preheat, doCleanPreheat, LS(PSTR("REMOVE"),
-                                                                 PSTR("\xC9" "\x81"  "\x8B" "\x81"  ),
+                                                                 PSTR("\xC9" "\x81"  "\xF6" "\x80"  ),
                                                                  PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\x97" "\x84"  "\xA9" "\x83"  )) , lcd_material_clean_nozzle_check_option, NULL, LS(PSTR("SKIP"),
                                                                                                                                 PSTR("\xAC" "\x80"  "\xAD" "\x80"  ),
                                                                                                                                 PSTR("\xD0" "\x82"  "\x9B" "\x83"  )) , MenuForward, MenuForward);
   
-  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Whether remove"),
-                                                  PSTR("\xA1" "\x82"  "\xA2" "\x82"  "\xA3" "\x82"  "\xA0" "\x81"  "\xC9" "\x81"  "\x8B" "\x81"  "\xAA" "\x80"  "\xAB" "\x80"  "\xD3" "\x80"  ),
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Please remove"),
+                                                  PSTR("\xB2" "\x80"  "\xC9" "\x81"  "\x8B" "\x81"  "\xAA" "\x80"  "\xAB" "\x80"  "\xD3" "\x80"  ),
                                                   PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\x97" "\x84"  "\xA9" "\x83"  " ""\x95" "\x83"  "\xF8" "\x83"   )) );
   lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("material from 3D"),
                                                   PSTR("\xC1" "\x80"  "\xF4" "\x80"  "\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  ),
                                                   PSTR("\x91" "\x84"  "\xB6" "\x83"  " ""\xA3" "\x84"  "\xAD" "\x84"  )) );
-  lcd_lib_draw_string_centerP(LS(30, 37, 37) , LS(PSTR("printer or not?"),
+  lcd_lib_draw_string_centerP(LS(30, 37, 37) , LS(PSTR("printer"),
                                                   PSTR(""),
                                                   PSTR("")) );
 }
 
 void doCleanHeat(){
+  fanSpeed = 0;
   setTargetHotend(220, active_extruder);
+  menuTimer = millis();
 }
 
 void lcd_material_clean_nozzle_check_option(){
   lcd_question_screen(lcd_material_clean_nozzle_heat, doCleanHeat, LS(PSTR("SKIP"),
                                                                       PSTR("\xAC" "\x80"  "\xAD" "\x80"  ),
-                                                                      PSTR("\xD0" "\x82"  "\x9B" "\x83"  )) , lcd_material_clean_nozzle_open, NULL, LS(PSTR("DETAIL"),
+                                                                      PSTR("\xD0" "\x82"  "\x9B" "\x83"  )) , lcd_material_clean_nozzle_open, NULL, LS(PSTR("DETAILS"),
                                                                                         PSTR("\xA4" "\x82"  "\xA5" "\x82"  ),
                                                                                         PSTR("\xCA" "\x83"  "\xF9" "\x82"  )) , MenuForward, MenuForward);
   
@@ -1296,10 +1322,17 @@ void lcd_material_clean_nozzle_heat(){
   int16_t temp = degHotend(active_extruder) - 20;
   int16_t target = degTargetHotend(active_extruder) - 20 - 10;
   if (temp < 0) temp = 0;
-  if (temp > target && !is_command_queued() && !isCommandInBuffer())
+  if (temp > target && millis()-menuTimer>800 && !is_command_queued() && !isCommandInBuffer())
   {
-    lcd_change_to_menu(lcd_material_clean_nozzle_heated,MAIN_MENU_ITEM_POS(0),MenuForward);
-    waitTimer = millis();
+    if (cleanTimes<0) {
+      lcd_change_to_menu(lcd_menu_change_material_insert_wait_user,MAIN_MENU_ITEM_POS(0),MenuForward);
+      current_position[E_AXIS] = 0;
+      plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+    }
+    else{
+      lcd_change_to_menu(lcd_material_clean_nozzle_heated,MAIN_MENU_ITEM_POS(0),MenuForward);
+    }
+    menuTimer = millis();
     temp = target;
   }
   
@@ -1331,7 +1364,7 @@ void doCleanCool(){
 }
 
 void lcd_material_clean_nozzle_heated(){
-  lcd_info_screen(lcd_material_clean_nozzle_cool, doCleanCool, LS(PSTR("CONTINUE"),
+  lcd_info_screen(lcd_material_clean_nozzle_repeat, doCleanCool, LS(PSTR("CONTINUE"),
                                                                   PSTR("\xC6" "\x80"  "\xC7" "\x80"  ),
                                                                   PSTR("\xEF" "\x82"  "\xF0" "\x82"  "\xF1" "\x82"  )) ,MenuForward);
   
@@ -1348,6 +1381,38 @@ void lcd_material_clean_nozzle_heated(){
                                                   PSTR(""),
                                                   PSTR("")) );
 }
+
+
+void doRepeatClean(){
+  cleanTimes++;
+}
+
+void doFinishClean(){
+  cleanTimes = -1;
+}
+
+void lcd_material_clean_nozzle_repeat(){
+  lcd_question_screen(lcd_material_clean_nozzle_cool, doRepeatClean, LS(PSTR("REPEAT"),
+                                                                      PSTR("\xB5" "\x82"  "\xC8" "\x81"  ),
+                                                                      PSTR("REPEAT")) , lcd_material_clean_nozzle_cool, doFinishClean, LS(PSTR("DONE"),
+                                                                                                                                          PSTR("\xDA" "\x81"  "\xBB" "\x80"  ),
+                                                                                                                                          PSTR("\xDD" "\x83"  "\xCE" "\x82"  "\xC7" "\x83"  )) , MenuForward, MenuForward);
+  
+  
+  lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Compare result in "),
+                                                  PSTR("\xEB" "\x81"  "\xAB" "\x82"  "\xA7" "\x80"  "\xAC" "\x82"  "\xAB" "\x81"  "\xAD" "\x82"  ),
+                                                  PSTR("\xDC" "\x82"  "\xDD" "\x82"  " ""\x84" "\x83"  "\xEB" "\x83"  "\xC8" "\x82"  "\xC4" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("user manual. Do you"),
+                                                  PSTR("\xA1" "\x82"  "\xA2" "\x82"  "\xA0" "\x81"  "\xB5" "\x82"  "\xC8" "\x81"  "\x97" "\x82"  "\xB6" "\x81"  "\xA0" "\x80"  "\xA1" "\x80"  "?"),
+                                                  PSTR("\x8F" "\x83"  "\xA4" "\x83"  "\xF3" "\x82"  "\x95" "\x83"  " ""\xD5" "\x82"  "\xD6" "\x82"   )) );
+  lcd_lib_draw_string_centerP(LS(30, 37, 37) , LS(PSTR("need to clean"),
+                                                  PSTR(""),
+                                                  PSTR("\x90" "\x84"  "\xC6" "\x82"  " ""\x95" "\x83"  "\xF8" "\x83"  " ""\x91" "\x84"  "\xB6" "\x83"  )) );
+  lcd_lib_draw_string_centerP(LS(40, 64, 64) , LS(PSTR("the nozzle again?"),
+                                                  PSTR(""),
+                                                  PSTR("")) );
+}
+
 
 void lcd_material_clean_nozzle_cool(){
   
@@ -1387,11 +1452,10 @@ void lcd_material_clean_nozzle_cool(){
 }
 
 void lcd_material_clean_nozzle_cooled(){
-  lcd_question_screen(lcd_material_clean_nozzle_heat, doCleanHeat, LS(PSTR("REPEAT"),
-                                                                           PSTR("\xB5" "\x82"  "\xC8" "\x81"  ),
-                                                                           PSTR("REPEAT")) , lcd_menu_maintenance, doCancelClean, LS(PSTR("DONE"),
-                                                                                                                                     PSTR("\xDA" "\x81"  "\xBB" "\x80"  ),
-                                                                                                                                     PSTR("\xDD" "\x83"  "\xCE" "\x82"  "\xC7" "\x83"  )) , MenuForward, MenuForward);
+  lcd_info_screen(lcd_material_clean_nozzle_heat, doCleanHeat, LS(PSTR("CONTINUE"),
+                                                                  PSTR("\xC6" "\x80"  "\xC7" "\x80"  ),
+                                                                  PSTR("\xEF" "\x82"  "\xF0" "\x82"  "\xF1" "\x82"  )) ,MenuForward);
+
   
   lcd_lib_draw_string_centerP(LS(10, 11, 11) , LS(PSTR("Slowly pull out the"),
                                                   PSTR("\xCA" "\x81"  "\xCA" "\x81"  "\x81" "\x81"  "\x84" "\x81"  "\xF5" "\x80"  "\xB6" "\x82"  "\x8B" "\x81"  ),
@@ -1399,8 +1463,8 @@ void lcd_material_clean_nozzle_cooled(){
   lcd_lib_draw_string_centerP(LS(20, 24, 24) , LS(PSTR("filament and cut the"),
                                                   PSTR("\xB7" "\x82"  "\xB8" "\x82"  "\xB9" "\x82"  "\xBA" "\x82"  "\xF4" "\x80"  "\xEC" "\x80"  "\xE3" "\x81"  ),
                                                   PSTR("\x8F" "\x83"  "\xA4" "\x83"  "\xF3" "\x82"  "\x95" "\x83"  " ""\xD5" "\x82"  "\xD6" "\x82"   )) );
-  lcd_lib_draw_string_centerP(LS(30, 37, 37) , LS(PSTR("end off"),
-                                                  PSTR("\xBB" "\x82"  "\xBC" "\x82"  "\xB5" "\x82"  "\xC8" "\x81"  "\xBD" "\x82"  "\xFE" "\x81"  ),
+  lcd_lib_draw_string_centerP(LS(30, 37, 37) , LS(PSTR("end off."),
+                                                  PSTR(""),
                                                   PSTR("\x90" "\x84"  "\xC6" "\x82"  " ""\x95" "\x83"  "\xF8" "\x83"  " ""\x91" "\x84"  "\xB6" "\x83"  )) );
 }
 

@@ -263,6 +263,8 @@ int PID_MAX = 160;
 int FILAMENT_FORWARD_LENGTH = FILAMENT_FORWARD_LENGTH_PRO;
 int FILAMENT_REVERSAL_LENGTH = FILAMENT_REVERSAL_LENGTH_PRO;
 
+unsigned int dropsegments = DROP_SEGMENTS;
+
 bool storeDevice(uint8_t type)
 {
   eeprom_write_byte((uint8_t*)EEPROM_DEVICE_OFFSET , type);
@@ -375,14 +377,14 @@ void retrieveDevice()
       Device_isBattery = false;
       break;
     case OVERLORD_TYPE_PS:
-      Device_isGate = true;
+      Device_isGate = false;
       Device_isNewHeater = true;
       Device_isPro = true;
       Device_isWifi = false;
       Device_isBedHeat = true;
       Device_isLevelSensor = true;
       Device_isABS = true;
-      Device_isBattery = true;
+      Device_isBattery = false;
       break;
     case OVERLORD_TYPE_MS:
       Device_isGate = false;
@@ -392,6 +394,16 @@ void retrieveDevice()
       Device_isBedHeat = false;
       Device_isLevelSensor = true;
       Device_isABS = false;
+      Device_isBattery = false;
+      break;
+    case OVERLORD_TYPE_PSD:
+      Device_isGate = true;
+      Device_isNewHeater = true;
+      Device_isPro = true;
+      Device_isWifi = false;
+      Device_isBedHeat = true;
+      Device_isLevelSensor = true;
+      Device_isABS = true;
       Device_isBattery = false;
       break;
     default:
@@ -870,6 +882,9 @@ void storeLanguage(uint8_t language)
 void retriveLanguage()
 {
   languageType = eeprom_read_byte((const uint8_t*)EEPROM_LANGUAGE_OFFSET);
+  if (languageType > 2) {
+    languageType = LANGUAGE_ENGLISH;
+  }
 }
 
 void setup()
@@ -969,18 +984,19 @@ void setup()
 
 void calculate_delta_reverse(float theDelta[3], float theResult[3]);
 
+void printFreeMemory(){
+  static unsigned long freeMemoryTimer=millis();
+  
+  if (millis()-freeMemoryTimer >1000) {
+    freeMemoryTimer=millis();
+    SERIAL_DEBUGLNPGM("freeMemory");
+    SERIAL_DEBUGLN(freeMemory());
+  }
+}
 
 
 void loop()
 {
-  //    static unsigned long freeMemoryTimer=millis();
-  //
-  //    if (millis()-freeMemoryTimer >1000) {
-  //        freeMemoryTimer=millis();
-  //        SERIAL_DEBUGLNPGM("freeMemory");
-  //        SERIAL_DEBUGLN(freeMemory());
-  //    }
-
   if (Device_isWifi) {
 
   static uint8_t powerAtomFlag = 0;
@@ -1390,6 +1406,11 @@ XYZ_CONSTS_FROM_CONFIG(float, base_max_pos_MINI,    MAX_POS_MINI);
 XYZ_CONSTS_FROM_CONFIG(float, base_home_pos_MINI,   HOME_POS_MINI);
 XYZ_CONSTS_FROM_CONFIG(float, max_length_MINI,      MAX_LENGTH_MINI);
 
+XYZ_CONSTS_FROM_CONFIG(float, base_min_pos_PRO_SENSOR,    MIN_POS_PRO_SENSOR);
+XYZ_CONSTS_FROM_CONFIG(float, base_max_pos_PRO_SENSOR,    MAX_POS_PRO_SENSOR);
+XYZ_CONSTS_FROM_CONFIG(float, base_home_pos_PRO_SENSOR,   HOME_POS_PRO_SENSOR);
+XYZ_CONSTS_FROM_CONFIG(float, max_length_PRO_SENSOR,      MAX_LENGTH_PRO_SENSOR);
+
 #define XYZ_CONSTS_READ(type, array)  \
 static inline type array(int axis)  \
 { \
@@ -1397,7 +1418,12 @@ static inline type array(int axis)  \
     return pgm_read_any(&array ## _GATE_P[axis]);  \
   } \
   else if (Device_isPro){ \
-    return pgm_read_any(&array ## _PRO_P[axis]); \
+    if (Device_isLevelSensor) {\
+      return pgm_read_any(&array ## _PRO_SENSOR_P[axis]); \
+    }\
+    else{\
+      return pgm_read_any(&array ## _PRO_P[axis]); \
+    }\
   } \
   else {  \
     return pgm_read_any(&array ## _MINI_P[axis]);  \
@@ -1516,9 +1542,9 @@ static void homeaxis(int axis) {
       return;
     }
     
-    destination[axis] = 2*home_retract_mm(axis) * home_dir(axis);
+    current_position[axis] = 2*home_retract_mm(axis) * home_dir(axis);
     feedrate = homing_feedrate[axis]/4;
-    plan_buffer_line_old(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
+    plan_buffer_line_old(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate/60, active_extruder);
     st_synchronize();
     
     
@@ -1713,7 +1739,7 @@ void process_commands()
           destination[i] = current_position[i];
         }
         feedrate = 0.0;
-#ifdef DELTA
+
         // A delta can only safely home all axis at the same time
         // all axis have to home at the same time
         
@@ -1746,113 +1772,6 @@ void process_commands()
         plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
         
         fittingBedUpdateK();
-        
-#else // NOT DELTA
-        
-        home_all_axis = !((code_seen(axis_codes[0])) || (code_seen(axis_codes[1])) || (code_seen(axis_codes[2])));
-        
-#if Z_HOME_DIR > 0                      // If homing away from BED do Z first
-#if defined(QUICK_HOME)
-        if(home_all_axis)
-        {
-          current_position[X_AXIS] = 0; current_position[Y_AXIS] = 0; current_position[Z_AXIS] = 0;
-          
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          
-          destination[X_AXIS] = 1.5 * X_MAX_LENGTH * X_HOME_DIR;
-          destination[Y_AXIS] = 1.5 * Y_MAX_LENGTH * Y_HOME_DIR;
-          destination[Z_AXIS] = 1.5 * Z_MAX_LENGTH * Z_HOME_DIR;
-          feedrate = homing_feedrate[X_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          axis_is_at_home(X_AXIS);
-          axis_is_at_home(Y_AXIS);
-          axis_is_at_home(Z_AXIS);
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = current_position[X_AXIS];
-          destination[Y_AXIS] = current_position[Y_AXIS];
-          destination[Z_AXIS] = current_position[Z_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          feedrate = 0.0;
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          current_position[X_AXIS] = destination[X_AXIS];
-          current_position[Y_AXIS] = destination[Y_AXIS];
-          current_position[Z_AXIS] = destination[Z_AXIS];
-        }
-#endif
-        if((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) {
-          HOMEAXIS(Z);
-        }
-#endif
-        
-#if defined(QUICK_HOME)
-        if((home_all_axis)||( code_seen(axis_codes[X_AXIS]) && code_seen(axis_codes[Y_AXIS])) )  //first diagonal move
-        {
-          current_position[X_AXIS] = 0;current_position[Y_AXIS] = 0;
-          
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = 1.5 * X_MAX_LENGTH * X_HOME_DIR;destination[Y_AXIS] = 1.5 * Y_MAX_LENGTH * Y_HOME_DIR;
-          feedrate = homing_feedrate[X_AXIS];
-          if(homing_feedrate[Y_AXIS]<feedrate)
-            feedrate =homing_feedrate[Y_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          st_synchronize();
-          
-          axis_is_at_home(X_AXIS);
-          axis_is_at_home(Y_AXIS);
-          plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-          destination[X_AXIS] = current_position[X_AXIS];
-          destination[Y_AXIS] = current_position[Y_AXIS];
-          plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
-          feedrate = 0.0;
-          st_synchronize();
-          endstops_hit_on_purpose();
-          
-          current_position[X_AXIS] = destination[X_AXIS];
-          current_position[Y_AXIS] = destination[Y_AXIS];
-          current_position[Z_AXIS] = destination[Z_AXIS];
-        }
-#endif
-        
-        if((home_all_axis) || (code_seen(axis_codes[X_AXIS])))
-        {
-          HOMEAXIS(X);
-        }
-        
-        if((home_all_axis) || (code_seen(axis_codes[Y_AXIS]))) {
-          HOMEAXIS(Y);
-        }
-        
-#if Z_HOME_DIR < 0                      // If homing towards BED do Z last
-        if((home_all_axis) || (code_seen(axis_codes[Z_AXIS]))) {
-          HOMEAXIS(Z);
-        }
-#endif
-        
-        if(code_seen(axis_codes[X_AXIS]))
-        {
-          if(code_value_long() != 0) {
-            current_position[X_AXIS]=code_value()+add_homeing[0];
-          }
-        }
-        
-        if(code_seen(axis_codes[Y_AXIS])) {
-          if(code_value_long() != 0) {
-            current_position[Y_AXIS]=code_value()+add_homeing[1];
-          }
-        }
-        
-        if(code_seen(axis_codes[Z_AXIS])) {
-          if(code_value_long() != 0) {
-            current_position[Z_AXIS]=code_value()+add_homeing[2];
-          }
-        }
-        plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
-#endif // DELTA
         
 #ifdef ENDSTOPS_ONLY_FOR_HOMING
         enable_endstops(false);
@@ -1972,7 +1891,7 @@ void process_commands()
         if (Device_isLevelSensor) {
           feedrate=2000;
           
-          destination[Z_AXIS] = 5;
+          destination[Z_AXIS] = 3;
           destination[X_AXIS] = fittingBedArray[index][X_AXIS];
           destination[Y_AXIS] = fittingBedArray[index][Y_AXIS];
           plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
@@ -2015,7 +1934,7 @@ void process_commands()
           destination[Z_AXIS] = fittingBedArray[index][Z_AXIS] - ADDING_Z_FOR_POSITIVE;
           
           plan_set_position(fittingBedArray[index][X_AXIS], fittingBedArray[index][Y_AXIS], destination[Z_AXIS], destination[E_AXIS]);
-          destination[Z_AXIS] = 5;
+          destination[Z_AXIS] = 3;
           plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);
           st_synchronize();
         }
@@ -3764,42 +3683,6 @@ void process_commands()
       SERIAL_ECHOPGM("M769 ");
       SERIAL_ECHOLNPGM(STRING_CONFIG_H_AUTHOR);
       break;
-      case 770:
-        if (code_seen('S')) setTargetHotend(code_value(), tmp_extruder);
-        break;
-      case 771:
-        if (code_seen('S')) setTargetBed(code_value());
-        break;
-      case 775:
-        if (code_seen('P')) feedmultiply = code_value();
-        break;
-      case 776:
-        if (code_seen('P')) extrudemultiply[active_extruder] = code_value();
-        break;
-      case 777:
-        
-        if (code_seen('P'))
-        {
-          fanSpeed=lround(code_value() * fanSpeedPercent / 100.0);
-          fanSpeed=map(fanSpeed, 0, 100, 0, 255);
-        }
-        
-        break;
-      case 778:
-        doPausePrint();
-        break;
-        
-      case 779:
-        isBLEUpdateTimer=millis();
-        isBLEUpdate=8;
-        break;
-        
-      case 780:
-        if (code_seen('S')) targetFanSpeed=code_value();
-        break;
-      case 781:
-        if (code_seen('S')) targetFeedmultiply=code_value();
-        break;
       case 790:
         if (code_seen('P')){
           if (code_value()==123) {
@@ -4187,32 +4070,6 @@ void prepare_move()
   clamp_to_software_endstops(destination);
   
   previous_millis_cmd = millis();
-  //#ifdef DELTA
-  //  float difference[NUM_AXIS];
-  //  for (int8_t i=0; i < NUM_AXIS; i++) {
-  //    difference[i] = destination[i] - current_position[i];
-  //  }
-  //  float cartesian_mm = sqrt(sq(difference[X_AXIS]) +
-  //                            sq(difference[Y_AXIS]) +
-  //                            sq(difference[Z_AXIS]));
-  //  if (cartesian_mm < 0.000001) { cartesian_mm = abs(difference[E_AXIS]); }
-  //  if (cartesian_mm < 0.000001) { return; }
-  //  float seconds = 6000 * cartesian_mm / feedrate / feedmultiply;
-  //  int steps = max(1, int(DELTA_SEGMENTS_PER_SECOND * seconds));
-  //  // SERIAL_ECHOPGM("mm="); SERIAL_ECHO(cartesian_mm);
-  //  // SERIAL_ECHOPGM(" seconds="); SERIAL_ECHO(seconds);
-  //  // SERIAL_ECHOPGM(" steps="); SERIAL_ECHOLN(steps);
-  //  for (int s = 1; s <= steps; s++) {
-  //    float fraction = float(s) / float(steps);
-  //    for(int8_t i=0; i < NUM_AXIS; i++) {
-  //      destination[i] = current_position[i] + difference[i] * fraction;
-  //    }
-  //    calculate_delta(destination);
-  //    plan_buffer_line(delta[X_AXIS], delta[Y_AXIS], delta[Z_AXIS],
-  //                     destination[E_AXIS], feedrate*feedmultiply/60/100.0,
-  //                     active_extruder);
-  //  }
-  //#else
   // Do not use feedmultiply for E or Z only moves
   if( (current_position[X_AXIS] == destination [X_AXIS]) && (current_position[Y_AXIS] == destination [Y_AXIS])) {
     plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder);

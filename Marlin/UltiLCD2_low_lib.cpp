@@ -3161,7 +3161,7 @@ static const uint8_t lcd_font_7x5[] PROGMEM = {
 	0x04, 0x02, 0x01, 0x02, 0x04,// ^
 	0x40, 0x40, 0x40, 0x40, 0x40,// _
 	0x00, 0x06, 0x09, 0x09, 0x06,// *`
-	0x00, 0x01, 0x02, 0x04, 0x00,// `
+	//0x00, 0x01, 0x02, 0x04, 0x00,// `
 	0x20, 0x54, 0x54, 0x54, 0x78,// a
 	0x7F, 0x48, 0x44, 0x44, 0x38,// b
 	0x38, 0x44, 0x44, 0x44, 0x20,// c
@@ -4005,9 +4005,7 @@ void lcd_lib_buttons_update_interrupt()
           lcd_lib_encoder_pos_interrupt--;
         }
         if (pushButtonUpTimer >= 6000>>5) {
-//          if ((pushButtonUpTimer & (0x0003>>5))==0x0000) {
-            lcd_lib_encoder_pos_interrupt--;
-//          }
+          lcd_lib_encoder_pos_interrupt--;
         }
       }
     }
@@ -4034,9 +4032,7 @@ void lcd_lib_buttons_update_interrupt()
           lcd_lib_encoder_pos_interrupt++;
         }
         if (pushButtonDownTimer >= 6000>>5) {
-//          if ((pushButtonDownTimer & (0x0003>>5))==0x0000) {
-            lcd_lib_encoder_pos_interrupt++;
-//          }
+          lcd_lib_encoder_pos_interrupt++;
         }
       }
     }
@@ -4055,7 +4051,6 @@ void lcd_lib_buttons_update()
     lcd_lib_button_down = buttonState;
     
     if ((lcd_lib_encoder_pos_interrupt || lcd_lib_button_pressed) && beepType!=beepTypeNormal) {
-//        lcd_lib_button_any_pressed=true;
       beepType=beepTypePress;
       powerOnDemandEnergyTimer=millis();
     }
@@ -4072,28 +4067,15 @@ void lcd_lib_buttons_update()
 
 char* int_to_string(int i, char* temp_buffer, const char* p_postfix)
 {
-    char* c = temp_buffer;
-    if (i < 0)
-    {
-        *c++ = '-'; 
-        i = -i;
-    }
-    if (i >= 10000)
-        *c++ = ((i/10000)%10)+'0';
-    if (i >= 1000)
-        *c++ = ((i/1000)%10)+'0';
-    if (i >= 100)
-        *c++ = ((i/100)%10)+'0';
-    if (i >= 10)
-        *c++ = ((i/10)%10)+'0';
-    *c++ = ((i)%10)+'0';
-    *c = '\0';
-    if (p_postfix)
-    {
-        strcpy_P(c, p_postfix);
-        c += strlen_P(p_postfix);
-    }
-    return c;
+  itoa(i, temp_buffer, 10);
+  temp_buffer += strlen(temp_buffer);
+
+  if (p_postfix)
+  {
+    strcpy_P(temp_buffer, p_postfix);
+    temp_buffer += strlen_P(p_postfix);
+  }
+  return temp_buffer;
 }
 
 char* int_to_time_string(unsigned long i, char* temp_buffer)
@@ -4121,29 +4103,14 @@ char* int_to_time_string(unsigned long i, char* temp_buffer)
 
 char* float_to_string(float f, char* temp_buffer, const char* p_postfix)
 {
-    int32_t i = f * 100.0 + 0.5;
-    char* c = temp_buffer;
-    if (i < 0)
-    {
-        *c++ = '-'; 
-        i = -i;
-    }
-    if (i >= 10000)
-        *c++ = ((i/10000)%10)+'0';
-    if (i >= 1000)
-        *c++ = ((i/1000)%10)+'0';
-    *c++ = ((i/100)%10)+'0';
-    *c++ = '.';
-    if (i >= 10)
-        *c++ = ((i/10)%10)+'0';
-    *c++ = ((i)%10)+'0';
-    *c = '\0';
-    if (p_postfix)
-    {
-        strcpy_P(c, p_postfix);
-        c += strlen_P(p_postfix);
-    }
-    return c;
+  dtostrf(f, 0, 2, temp_buffer);
+  temp_buffer += strlen(temp_buffer);
+  if (p_postfix)
+  {
+    strcpy_P(temp_buffer, p_postfix);
+    temp_buffer += strlen_P(p_postfix);
+  }
+  return temp_buffer;
 }
 
 #endif//ENABLE_ULTILCD2

@@ -248,29 +248,8 @@ bool SdBaseFile::exists(const char* name) {
  * \return For success fgets() returns the length of the string in \a str.
  * If no data is read, fgets() returns zero for EOF or -1 if an error occurred.
  **/
-int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim) {
-//  char ch;
-//  int16_t n = 0;
-//  int16_t r = -1;
-//  while ((n + 1) < num && (r = read(&ch, 1)) == 1) {
-//    // delete CR
-//    if (ch == '\r') continue;
-//    str[n++] = ch;
-//    if (!delim) {
-//      if (ch == '\n') break;
-//    } else {
-//      if (strchr(delim, ch)) break;
-//    }
-//  }
-//  if (r < 0) {
-//    // read error
-//    return -1;
-//  }
-//  str[n] = '\0';
-//  return n;
-  
-  
-  
+int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim)
+{
   uint8_t* dst = reinterpret_cast<uint8_t*>(str);
   uint16_t offset;
   uint16_t toRead;
@@ -309,11 +288,7 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim) {
     
     // amount to be read from current block
     if (n > (512 - offset)) n = 512 - offset;
-    
-    // no buffering needed if n == 512
-    if (n == 512 && block != vol_->cacheBlockNumber()) {
-      if (!vol_->readBlock(block, dst)) goto fail;
-    } else {
+
       // read block to cache and copy data to caller
       if (!vol_->cacheRawBlock(block, SdVolume::CACHE_FOR_READ)) goto fail;
       uint8_t* src = vol_->cache()->data + offset;
@@ -327,7 +302,6 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim) {
         toRead -= n;
         break;
       }
-    }
     dst += n;
     curPosition_ += n;
     toRead -= n;

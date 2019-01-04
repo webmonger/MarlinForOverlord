@@ -1340,9 +1340,6 @@ ISR(TIMER0_COMPB_vect)
   #if EXTRUDERS > 2
   if(soft_pwm_2 <= pwm_count) WRITE(HEATER_2_PIN,0);
   #endif
-//  #if defined(HEATER_BED_PIN) && HEATER_BED_PIN > -1
-//  if(soft_pwm_b <= pwm_count) WRITE(HEATER_BED_PIN,0);
-//  #endif
   #ifdef FAN_SOFT_PWM
   if(soft_pwm_fan <= pwm_count) WRITE(FAN_PIN,0);
   #endif

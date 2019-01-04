@@ -6,6 +6,7 @@
 #include "ConfigurationStore.h"
 #include "UltiLCD2_menu_print.h"
 #include "UltiLCD2_menu_material.h"
+#include "UltiLCD2_menu_maintenance.h"
 
 #ifdef SoftwareAutoLevel
 #include "fitting_bed.h"
@@ -291,8 +292,11 @@ void Config_RetrieveSettings()
         SERIAL_ECHO_START;
         SERIAL_ECHOLNPGM("Stored settings retrieved");
 //        SERIAL_DEBUGPGM("Size of the setting in eeprom:");
-//        SERIAL_DEBUGLN(i);
-
+//    SERIAL_DEBUGLN(i);
+    
+    if (Device_isLevelSensor) {
+      readSensorOffset();
+    }
     }
     else
     {
@@ -380,6 +384,7 @@ void Config_ResetDefault()
     fittingBedResetBackUp();
     fittingBedUpdateK();
     fittingBedOffsetInit();
+  restoreFactorySensorOffset();
   if (Device_isLevelSensor) {
     touchPlateOffset=TouchPlateOffsetSensor;
   }

@@ -4,7 +4,7 @@
 #include "Configuration.h"
 
 
-#define EEPROM_MATERIAL_SETTINGS_OFFSET 0x800   
+#define EEPROM_MATERIAL_SETTINGS_OFFSET 0xe00
 
 #define EEPROM_FIRST_RUN_DONE_OFFSET 0x3ff  //1 Byte
 
@@ -26,7 +26,9 @@
 
 #define EEPROM_DEVICE_OFFSET 0xB00
 
-#define EEPROM_DEVICE_ID 0xE00
+#define EEPROM_FITTING_OFFSET 0xB10 //
+
+#define EEPROM_DEVICE_ID 0xD80
 
 #define EEPROM_OFFSET 100
 
