@@ -475,6 +475,8 @@ void lcd_scroll_menu(const char* menuNameP, int8_t entryCount, entryNameCallback
 
   int16_t targetViewPos;
   int16_t viewDiff;
+  int16_t drawOffset;
+  uint8_t itemOffset;
 
   switch (languageType) {
   case LANGUAGE_CHINESE:
@@ -505,9 +507,9 @@ void lcd_scroll_menu(const char* menuNameP, int8_t entryCount, entryNameCallback
         viewPos=0;
     }
     
-    int16_t drawOffset = 7 + 12 -viewPos % 12;
+    drawOffset = 7 + 12 -viewPos % 12;
 
-    uint8_t itemOffset = viewPos / 12;
+    itemOffset = viewPos / 12;
     for(int8_t n=-2; n<4; n++)
     {
         uint8_t itemIdx = n + itemOffset;

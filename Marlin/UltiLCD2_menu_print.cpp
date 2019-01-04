@@ -33,7 +33,7 @@ static void postPrintReady();
 static void lcd_menu_print_classic_warning_again();
 static void lcd_menu_print_classic_warning();
 static void lcd_menu_print_error();
-static void lcd_menu_print_abort();
+void lcd_menu_print_abort();
 static void lcd_menu_print_tune_retraction();
 static void lcd_retraction_details(uint8_t nr);
 static char* lcd_retraction_item(uint8_t nr);
@@ -261,7 +261,7 @@ static char* lcd_sd_menu_filename_callback(uint8_t nr)
               
               uint8_t idx = nr % LCD_CACHE_COUNT;
               LCD_CACHE_ID(idx) = nr;
-              strcpy(LCD_CACHE_FILENAME(idx), card.longFilename, LONG_FILENAME_LENGTH -1);
+              strncpy(LCD_CACHE_FILENAME(idx), card.longFilename, LONG_FILENAME_LENGTH -1);
               LCD_CACHE_FILENAME(idx)[LONG_FILENAME_LENGTH -1] = '\0';
               LCD_CACHE_TYPE(idx) = card.filenameIsDir ? 1 : 0;
               if (card.errorCode() && card.sdInserted)
@@ -456,7 +456,7 @@ void doPreparePrint(){
     fanSpeed = 0;
     resumeState=RESUME_STATE_NORMAL;
     
-    enquecommand_P(PSTR("G28\nG1 F6000 Z50\nG1 X-10 Y"Y_MIN_POS_STR " Z" PRIMING_HEIGHT_STRING));
+    enquecommand_P(PSTR("G28\nG1 F6000 Z50\nG1 X-10 Y" Y_MIN_POS_STR " Z" PRIMING_HEIGHT_STRING));
     
     lcd_change_to_menu(lcd_menu_print_heatup);
   }else{
@@ -762,8 +762,8 @@ static void doStartPrint()
             
             bufferPtr=int_to_string(END_OF_PRINT_RECOVERY_SPEED*60, bufferPtr);
             
-            strcpy_P(bufferPtr, PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
-            bufferPtr+=strlen_P(PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
+            strcpy_P(bufferPtr, PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
+            bufferPtr+=strlen_P(PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
             
             bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
             
@@ -784,8 +784,8 @@ static void doStartPrint()
             //Todo
         }
         else{
-            strcpy_P(bufferPtr, PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
-            bufferPtr+=strlen_P(PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
+            strcpy_P(bufferPtr, PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
+            bufferPtr+=strlen_P(PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
             
             bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
         
@@ -1434,7 +1434,7 @@ void doPausePrint()
 }
 
 
-static void lcd_menu_print_abort()
+void lcd_menu_print_abort()
 {
     LED_GLOW();
     if (card.sdprinting) {
@@ -1623,7 +1623,7 @@ static uint8_t doStableReadSD(uint32_t theFilePosition, char *theBuffer, uint8_t
     return RESUME_ERROR_NONE;
 }
 
-static uint8_t doSearchZLayer(uint32_t& theFilePosition, char *theBuffer, uint8_t theSize)
+static uint8_t doSearchZLayer(uint32_t theFilePosition, char *theBuffer, uint8_t theSize)
 {
     menuTimer=millis();
     
@@ -1834,8 +1834,8 @@ static void doResumeHeatUp(uint32_t& theSDUPSFilePosition)
   
   bufferPtr=float_to_string(min(SDUPSCurrentPosition[Z_AXIS]+PRIMING_HEIGHT+50, 260), bufferPtr);
   
-  strcpy_P(bufferPtr, PSTR("\nG1 X0 Y"Y_MIN_POS_STR " Z"));
-  bufferPtr+=strlen_P(PSTR("\nG1 X0 Y"Y_MIN_POS_STR " Z"));
+  strcpy_P(bufferPtr, PSTR("\nG1 X0 Y" Y_MIN_POS_STR " Z"));
+  bufferPtr+=strlen_P(PSTR("\nG1 X0 Y" Y_MIN_POS_STR " Z"));
   
   bufferPtr=float_to_string(min(SDUPSCurrentPosition[Z_AXIS]+PRIMING_HEIGHT+30, 260), bufferPtr);
   

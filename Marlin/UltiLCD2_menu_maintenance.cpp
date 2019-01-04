@@ -29,7 +29,7 @@ static void doAdvancedLevelDone();
 static void doAdvancedLevel();
 void lcd_menu_maintenance_advanced_bed_heatup();
 static void lcd_menu_maintenance_extrude();
-static void lcd_menu_maintenance_advanced_heatup();
+void lcd_menu_maintenance_advanced_heatup();
 static void lcd_menu_advanced_about();
 static void lcd_advanced_about_details(uint8_t nr);
 static char* lcd_advanced_about_item(uint8_t nr);
@@ -120,7 +120,8 @@ static void lcd_menu_maintenance_details(uint8_t nr)
 #else
     lcd_draw_detailP(LS(PSTR("Change the Material."),
                         PSTR("\xA3" "\x81"  "\xA2" "\x81"  "\xAA" "\x80"  "\xAB" "\x80"  "\xF5" "\x80"  "\xF6" "\x80"  ),
-                        PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\xA3" "\x84"  "\xA9" "\x84"  "\x83" "\x83"  )) );#endif
+                        PSTR("\x96" "\x83"  "\x97" "\x83"  " ""\xA3" "\x84"  "\xA9" "\x84"  "\x83" "\x83"  )) );
+#endif
     }
     else if (nr == 1)
         lcd_draw_detailP(LS(PSTR("Level the Platform."),
@@ -645,7 +646,7 @@ static void doManualLevel()
     SERIAL_DEBUGLN(add_homeing[Z_AXIS]);
   
     enquecommand_P(PSTR("G28"));
-    enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y"Y_MIN_POS_STR" Z" PRIMING_HEIGHT_STRING));
+    enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y" Y_MIN_POS_STR " Z" PRIMING_HEIGHT_STRING));
     
     for(uint8_t e = 0; e<EXTRUDERS; e++)
     {
@@ -668,8 +669,8 @@ static void doManualLevel()
                 
                 bufferPtr=int_to_string(END_OF_PRINT_RECOVERY_SPEED*60, bufferPtr);
                 
-                strcpy_P(bufferPtr, PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
-                bufferPtr+=strlen_P(PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
+                strcpy_P(bufferPtr, PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
+                bufferPtr+=strlen_P(PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
@@ -684,8 +685,8 @@ static void doManualLevel()
                 //Todo
             }
             else{
-                strcpy_P(bufferPtr, PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
-                bufferPtr+=strlen_P(PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
+                strcpy_P(bufferPtr, PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
+                bufferPtr+=strlen_P(PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
                 
                 bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
                 
@@ -696,7 +697,7 @@ static void doManualLevel()
         enquecommand(buffer);
     }
     
-    enquecommand_P(PSTR("G1 X"CIRCLE_RADIUS_STRING" Y0 Z0.3 F3000"));
+    enquecommand_P(PSTR("G1 X" CIRCLE_RADIUS_STRING " Y0 Z0.3 F3000"));
 }
 
 static void doCancelHeatManualLevel()
@@ -1115,7 +1116,7 @@ static void lcd_menu_advanced_temperature()
         /****************************************************************************************
          *Hotend Heatup
          ****************************************************************************************/
-static void lcd_menu_maintenance_advanced_heatup()
+void lcd_menu_maintenance_advanced_heatup()
 {
     LED_NORMAL();
     if (lcd_lib_encoder_pos / ENCODER_TICKS_PER_SCROLL_MENU_ITEM != 0)
@@ -1387,7 +1388,6 @@ static void lcd_advanced_settings_details(uint8_t nr)
                         PSTR("\xAA" "\x80"  "\xAB" "\x80"  "\xBE" "\x81"  "\xCB" "\x81"  "\xE0" "\x80"  "\xE1" "\x80"  ),
                         PSTR("\xA9" "\x83"  "\xA7" "\x84"  " ""\xFF" "\x82"  "\xC6" "\x82"  " ""\x84" "\x83"  "\x85" "\x83"  )) );
   }
-    }
   else if (nr == 2)
     {
       lcd_draw_detailP(LS(PSTR("Material settings."),

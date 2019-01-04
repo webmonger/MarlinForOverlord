@@ -254,6 +254,9 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim)
   uint16_t offset;
   uint16_t toRead;
   uint32_t block;  // raw device block number
+  uint8_t blockOfCluster;
+  uint16_t n;
+  uint8_t* src;
   
   num = num-1;
   
@@ -271,7 +274,7 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim)
     if (type_ == FAT_FILE_TYPE_ROOT_FIXED) {
       block = vol_->rootDirStart() + (curPosition_ >> 9);
     } else {
-      uint8_t blockOfCluster = vol_->blockOfCluster(curPosition_);
+      blockOfCluster = vol_->blockOfCluster(curPosition_);
       if (offset == 0 && blockOfCluster == 0) {
         // start of new cluster
         if (curPosition_ == 0) {
@@ -284,14 +287,14 @@ int16_t SdBaseFile::fgets(char* str, int16_t num, char* delim)
       }
       block = vol_->clusterStartBlock(curCluster_) + blockOfCluster;
     }
-    uint16_t n = toRead;
-    
+    n = toRead;
+
     // amount to be read from current block
     if (n > (512 - offset)) n = 512 - offset;
 
       // read block to cache and copy data to caller
       if (!vol_->cacheRawBlock(block, SdVolume::CACHE_FOR_READ)) goto fail;
-      uint8_t* src = vol_->cache()->data + offset;
+      src = vol_->cache()->data + offset;
       
       src=(uint8_t*)memccpy(dst, src, '\n', n);
       if (src != NULL) {

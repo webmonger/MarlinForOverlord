@@ -28,7 +28,7 @@ void inline eeprom_write_float(float* addr, float f)
 }
 #endif
 
-struct materialSettings material[EXTRUDERS] = {0,0,0,0.0};
+struct materialSettings material[EXTRUDERS] = {0,0,0,0};
 
 void doCooldown();//TODO
 static void lcd_menu_material_main();
@@ -469,7 +469,7 @@ static void lcd_menu_change_material_insert_forward()
         digipot_current(2, motor_current_setting[2]*2/3);//Set the E motor power lower to we skip instead of grind.
 #endif
         currentMenu = lcd_menu_change_material_insert;
-        waitTimer = millis();
+        menuTimer = millis();
         SELECT_MAIN_MENU_ITEM(0);
     }
 
