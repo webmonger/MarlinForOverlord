@@ -45,10 +45,10 @@
 
 
 
-//#define OVERLORD_BETA "-B8 "
- #define OVERLORD_BETA ""
+#define OVERLORD_BETA "-B1 "
+//  #define OVERLORD_BETA ""
 
-#define OVERLORD_VERSION "Ver.2.3.7"
+#define OVERLORD_VERSION "Ver.2.3.8"
 
 #define STRING_CONFIG_H_AUTHOR OVERLORD_VERSION OVERLORD_BETA
 
