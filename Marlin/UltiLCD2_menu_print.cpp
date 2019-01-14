@@ -620,8 +620,8 @@ static void doStartPrint()
         
         bufferPtr=float_to_string(min(SDUPSCurrentPosition[Z_AXIS]+PRIMING_HEIGHT+50, 260), bufferPtr);
         
-        strcpy_P(bufferPtr, PSTR("\nG1 X0 Y"Y_MIN_POS_STR" Z"));
-        bufferPtr+=strlen_P(PSTR("\nG1 X0 Y"Y_MIN_POS_STR" Z"));
+        strcpy_P(bufferPtr, PSTR("\nG1 X0 Y" Y_MIN_POS_STR " Z"));
+        bufferPtr+=strlen_P(PSTR("\nG1 X0 Y" Y_MIN_POS_STR " Z"));
         
         bufferPtr=float_to_string(min(SDUPSCurrentPosition[Z_AXIS]+PRIMING_HEIGHT, 260), bufferPtr);
         
@@ -631,7 +631,7 @@ static void doStartPrint()
         if (isUltiGcode) {
             
             SDUPSStart();
-          enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y"Y_MIN_POS_STR" Z" PRIMING_HEIGHT_STRING));
+          enquecommand_P(PSTR("G1 F6000 Z50\nG1 X0 Y" Y_MIN_POS_STR " Z" PRIMING_HEIGHT_STRING));
         }
     }
   
@@ -658,8 +658,8 @@ static void doStartPrint()
             
             bufferPtr=int_to_string(END_OF_PRINT_RECOVERY_SPEED*60, bufferPtr);
             
-            strcpy_P(bufferPtr, PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
-            bufferPtr+=strlen_P(PSTR(" E-"PRIMING_MM3_STRING"\nG1 F"));
+            strcpy_P(bufferPtr, PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
+            bufferPtr+=strlen_P(PSTR(" E-" PRIMING_MM3_STRING "\nG1 F"));
             
             bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
             
@@ -674,8 +674,8 @@ static void doStartPrint()
             //Todo
         }
         else{
-            strcpy_P(bufferPtr, PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
-            bufferPtr+=strlen_P(PSTR("G92 E-"PRIMING_MM3_STRING"\nG1 F"));
+            strcpy_P(bufferPtr, PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
+            bufferPtr+=strlen_P(PSTR("G92 E-" PRIMING_MM3_STRING "\nG1 F"));
             
             bufferPtr=int_to_string(PRIMING_MM3_PER_SEC * volume_to_filament_length[e]*60, bufferPtr);
             
