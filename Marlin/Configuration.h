@@ -81,12 +81,14 @@
 
 //#define OVERLORD_WIFI
 
-#ifdef OVERLORD_PRO
-#define STRING_CONFIG_H_AUTHOR "Version 2.1.5P -beta 2" // Who made the changes.
-#else
-#define STRING_CONFIG_H_AUTHOR "Version 2.1.5M -beta 2"
-#endif
+#define FW_VERSION "Version 2.1.6"
+#define BETA_FLAG "-beta 2"
 
+#ifdef OVERLORD_PRO
+#define STRING_CONFIG_H_AUTHOR FW_VERSION "P" BETA_FLAG // Who made the changes.
+#else
+#define STRING_CONFIG_H_AUTHOR FW_VERSION "M" BETA_FLAG
+#endif
 
 #ifdef OverLord
 
@@ -224,9 +226,9 @@
 // When temperature exceeds max temp, your heater will be switched off.
 // This feature exists to protect your hotend from overheating accidentally, but *NOT* from thermistor short/failure!
 // You should use MINTEMP for thermistor short/failure protection.
-#define HEATER_0_MAXTEMP 275
-#define HEATER_1_MAXTEMP 275
-#define HEATER_2_MAXTEMP 275
+#define HEATER_0_MAXTEMP 280
+#define HEATER_1_MAXTEMP 280
+#define HEATER_2_MAXTEMP 280
 #define BED_MAXTEMP 115
 
 //Check if the heater heats up MAX_HEATING_TEMPERATURE_INCREASE within MAX_HEATING_CHECK_MILLIS while the PID was at the maximum.
@@ -267,9 +269,9 @@
 
 // If you are using a preconfigured hotend then you can use one of the value sets by uncommenting it
 #if defined(OverLord)
-  #define  DEFAULT_Kp 3.61
-  #define  DEFAULT_Ki 0.22
-  #define  DEFAULT_Kd 15.16
+  #define  DEFAULT_Kp 12.25
+  #define  DEFAULT_Ki 0.94f
+  #define  DEFAULT_Kd 39.75
 #endif
 
 
@@ -344,7 +346,7 @@
 #define PREVENT_LENGTHY_EXTRUDE
 
 #define EXTRUDE_MINTEMP 170
-#define EXTRUDE_MAXLENGTH (X_MAX_LENGTH+Y_MAX_LENGTH) //prevent extrusion of very large distances.
+#define EXTRUDE_MAXLENGTH (300) //prevent extrusion of very large distances.
 
 //===========================================================================
 //=============================Mechanical Settings===========================
@@ -690,13 +692,13 @@ const bool Z_ENDSTOPS_INVERTING = true; // set to true to invert the logic of th
 // Configuration of behaviors at the start and end of prints
 #define END_OF_PRINT_RETRACTION 20		// number of mm to retract when printer goes idle
 #define END_OF_PRINT_RECOVERY_SPEED 5 	// speed to recover that assumed retraction at (mm/s)
-#define PRIMING_MM3	20					// number of mm^3 of plastic to extrude when priming
-#define PRIMING_MM3_STRING "20"
+#define PRIMING_MM3	3					// number of mm^3 of plastic to extrude when priming
+#define PRIMING_MM3_STRING "3"
 										// (Ultimaker 2 hot end capacity is approx 80 mm^3)
-#define PRIMING_MM3_PER_SEC 5			// Rate at which to prime head (in mm^3/s)
+#define PRIMING_MM3_PER_SEC 15			// Rate at which to prime head (in mm^3/s)
 										// (Ultimaker 2 upper limit is 8-10)
-#define PRIMING_HEIGHT 50				// Height at which to perform the priming extrusions
-#define PRIMING_HEIGHT_STRING "50"
+#define PRIMING_HEIGHT 1				// Height at which to perform the priming extrusions
+#define PRIMING_HEIGHT_STRING "1"
 
 // Bed leveling wizard configuration
 #define LEVELING_OFFSET 0.1				// Assumed thickness of feeler gauge/paper used in leveling (mm)
