@@ -980,6 +980,7 @@ void setup()
 
   retriveLanguage();
   SERIAL_DEBUGLN((int)Device_type);
+  SERIAL_PROTOCOLLN(MSG_OK);
 }
 
 void calculate_delta_reverse(float theDelta[3], float theResult[3]);
